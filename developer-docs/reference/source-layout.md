@@ -12,6 +12,10 @@ This page describes the source root that `agentrc init` creates: each file and d
 | `components.json` | external components: MCP servers, plugins, foreign hook groups, third-party skills and dependencies | every runtime that supports the component |
 | `control-plane.md` | generated inventory of every source item and project with its opt-in cells; written by `agentrc reconcile`, never by hand | `agentrc` itself |
 
+## where-configuration-is-read
+
+`agentrc/paths.py` and `agentrc/config.py` are the only modules that read `AGENTRC_HOME`, `AGENTRC_SOURCE`, `LLM_ROOT_PROJECTS_DIR`, `AGENTRC_GITHUB_OWNER` and `agentrc.toml`; every other module asks them. The home is `AGENTRC_HOME`, then `HOME`, then the platform home. The source root is an explicit argument, then `AGENTRC_SOURCE`, then the nearest directory at or above the current directory that holds `agentrc.toml`, then the current directory. The projects root is `LLM_ROOT_PROJECTS_DIR`, then `<home>/projects/active`. The owner is `AGENTRC_GITHUB_OWNER`, then `owner` in `agentrc.toml`, then empty. All of it is read when called, never at import.
+
 ## directories
 
 | path | holds | read by |

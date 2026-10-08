@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -24,3 +26,58 @@ def tree_snapshot(root: Path) -> dict[str, bytes]:
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT
+
+
+class ExternalTestFailure(Exception):
+    """A shell or bun test exited non-zero."""
+
+
+class ExternalTestItem(pytest.Item):
+    """One test file run as a subprocess; it fails on a non-zero exit."""
+
+    command: str
+    marker: str
+
+    def __init__(self, *, command: list[str], marker: str, **kwargs):
+        super().__init__(**kwargs)
+        self.command = command
+        self.add_marker(marker)
+
+    def runtest(self) -> None:
+        result = subprocess.run(
+            self.command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        )
+        if result.returncode != 0:
+            raise ExternalTestFailure(
+                f"{' '.join(self.command)} exited {result.returncode}\n"
+                f"{result.stdout}{result.stderr}"
+            )
+
+    def repr_failure(self, excinfo, style=None):
+        if excinfo.errisinstance(ExternalTestFailure):
+            return str(excinfo.value)
+        return super().repr_failure(excinfo, style)
+
+    def reportinfo(self):
+        return self.path, None, self.name
+
+
+class ExternalTestFile(pytest.File):
+    def collect(self):
+        if self.path.name.endswith(".test.sh"):
+            yield ExternalTestItem.from_parent(
+                self, name=self.path.name, command=["bash", str(self.path)], marker="shell"
+            )
+        elif self.path.name.endswith(".test.ts"):
+            item = ExternalTestItem.from_parent(
+                self, name=self.path.name, command=["bun", "test", str(self.path)], marker="bun"
+            )
+            if shutil.which("bun") is None:
+                item.add_marker(pytest.mark.skip(reason="bun is not on PATH"))
+            yield item
+
+
+def pytest_collect_file(file_path: Path, parent):
+    if file_path.name.endswith((".test.sh", ".test.ts")):
+        return ExternalTestFile.from_parent(parent, path=file_path)
+    return None
