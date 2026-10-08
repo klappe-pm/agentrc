@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "third_party_skills": [
+    {
+      "name": "example-skill",
+      "runtimes": ["example-runtime"],
+      "owner": "example-tool",
+      "wanted": true,
+      "installer": "example-tool install"
+    }
+  ]
+}

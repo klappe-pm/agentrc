@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "codexShellEnvironment": { "passthrough": ["example_var"] },
+  "allow": [],
+  "deny": [],
+  "ask": []
+}

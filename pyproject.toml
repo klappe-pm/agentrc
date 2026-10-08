@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentrc"
+dynamic = ["version"]
+description = "One agent configuration source, rendered into every agent runtime."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Kevin Lappe" }]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest", "jsonschema"]
+
+[project.scripts]
+agentrc = "agentrc.cli:main"
+
+[project.urls]
+Repository = "https://github.com/klappe-pm/agentrc"
+
+[tool.hatch.version]
+path = "agentrc/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentrc"]
+# Ship every file under agentrc/, including non-Python data and dotfiles.
+artifacts = ["agentrc/data/**"]
+
+[tool.hatch.build.targets.sdist]
+include = ["agentrc", "tests", "examples", "README.md", "LICENSE", "pyproject.toml"]
+artifacts = ["agentrc/data/**"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: builds a wheel and installs it into a fresh virtual environment (deselect with -m 'not slow')",
+]

@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "autonomy": {
+    "concurrency": 2,
+    "per_project": 1,
+    "interval_minutes": 10,
+    "daily_tokens": null
+  },
+  "budgets": {
+    "warn_at": 0.8,
+    "turns": 200,
+    "wall_minutes": null,
+    "tool_calls": { "total": 500, "per_tool": { "Bash": 100 } },
+    "tokens": { "input": 1000000, "output": null },
+    "skills": { "count": 20 },
+    "mcp_servers": { "count": 5, "tools": 40 },
+    "rules": { "words": 8000 },
+    "hooks": { "count": 30 },
+    "fleet": { "model": "example-model", "concurrent": 2 }
+  },
+  "runtime_settings": {
+    "claude": {
+      "model": "inherit",
+      "aliases": { "large": "example-large-model" },
+      "settings": { "exampleSetting": true },
+      "environment_plugins": { "local": ["example-plugin@example-marketplace"] }
+    },
+    "codex": { "model": "example-model", "subagent_model": "example-small-model" },
+    "opencode": {
+      "model": "example-provider/example-model",
+      "provider": { "example-provider": { "options": { "baseURL": "http://localhost:8080/v1" } } }
+    }
+  },
+  "platform_differences": [
+    {
+      "name": "example-difference",
+      "description": "A tool present only on Linux.",
+      "platform": "linux",
+      "tests": ["tests/test_example.py"],
+      "paths": ["home:.example/*"]
+    }
+  ],
+  "environments": {
+    "staging": { "ref": "main", "description": "Deploys from main." }
+  },
+  "promotion": {
+    "soak_days": 3,
+    "description": "Default soak.",
+    "risk_tiers": {
+      "docs": { "soak_days": 0, "paths": ["docs/"], "documentation": true },
+      "engine": { "soak_days": 5, "paths": ["src/*.py"] }
+    }
+  },
+  "deploy": [{ "opaque": "extension data is not described" }],
+  "services": [{ "opaque": "extension data is not described" }],
+  "mcp_servers": [
+    {
+      "name": "example-server",
+      "runtimes": ["claude", "codex"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-mcp",
+      "args": ["--stdio"],
+      "env": { "EXAMPLE_TOKEN": "secret://example/token" }
+    },
+    {
+      "name": "example-remote",
+      "runtimes": ["gemini"],
+      "owner": "example-owner",
+      "wanted": true,
+      "url": "https://mcp.example.com/sse",
+      "transport": "sse"
+    },
+    {
+      "name": "Example Hosted Connector",
+      "runtimes": ["claude"],
+      "owner": "example-provider",
+      "wanted": false,
+      "hosted": true
+    }
+  ],
+  "plugins": [
+    {
+      "name": "example-plugin",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "marketplace": "example-marketplace"
+    },
+    {
+      "name": "example-file-plugin",
+      "runtimes": ["opencode"],
+      "owner": "example-owner",
+      "wanted": true,
+      "path": "plugins/example.js"
+    }
+  ],
+  "foreign_hooks": [
+    {
+      "name": "example-hook",
+      "runtimes": ["claude", "codex"],
+      "owner": "example-tool",
+      "wanted": true,
+      "match": "example-tool hook",
+      "registration": { "claude": "hooks/foreign/example-claude.json" }
+    },
+    {
+      "name": "example-unwanted-hook",
+      "runtimes": ["claude"],
+      "owner": "example-tool",
+      "wanted": false,
+      "match": "unwanted-tool"
+    }
+  ],
+  "third_party_skills": [
+    {
+      "name": "example-skill-pack",
+      "runtimes": ["claude"],
+      "owner": "example-tool",
+      "wanted": true,
+      "installer": "example-tool skills install",
+      "skills": ["example-skill-a", "example-skill-b"]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "example-base",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example",
+      "install": "built into the base image",
+      "version": "1.0.0",
+      "image": { "method": "base", "from": "example/base:{version}" }
+    },
+    {
+      "name": "example-apt",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-apt",
+      "install": "apt-get install example-apt",
+      "version": "2.0.0",
+      "version_command": "example-apt --version",
+      "platform": "linux",
+      "image": { "method": "apt", "package": "example-apt" }
+    },
+    {
+      "name": "example-release",
+      "runtimes": ["codex"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-release",
+      "install": "download the release archive",
+      "version": "3.0.0",
+      "image": {
+        "method": "release",
+        "url": "https://example.com/releases/{version}/example-{arch}.tar.gz",
+        "extract": "tar",
+        "strip": 0,
+        "binary": "example-bin",
+        "arch": { "amd64": "x86_64", "arm64": "aarch64" },
+        "sha256": {
+          "amd64": "0000000000000000000000000000000000000000000000000000000000000000",
+          "arm64": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      }
+    },
+    {
+      "name": "example-source",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-source",
+      "install": "compile from the release tarball",
+      "version": "4.0.0",
+      "image": {
+        "method": "source",
+        "url": "https://example.com/src/example-{version}.tar.gz",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    }
+  ]
+}

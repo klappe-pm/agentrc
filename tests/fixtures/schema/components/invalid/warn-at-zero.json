@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "budgets": {
+    "warn_at": 0
+  }
+}

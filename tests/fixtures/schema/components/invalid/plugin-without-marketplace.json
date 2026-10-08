@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "name": "example-plugin",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true
+    }
+  ]
+}

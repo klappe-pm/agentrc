@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "defaultMode": "default",
+  "codexApprovalPolicy": "on-request",
+  "blockReadsOutsideWorkingDirectories": false,
+  "additionalDirectories": [
+    "~/projects"
+  ],
+  "runtimeDirectories": [
+    "~/.claude",
+    "~/.codex",
+    "~/.gemini",
+    "~/.cursor",
+    "~/.config/opencode"
+  ],
+  "codexNetwork": {
+    "enabled": false,
+    "domains": {}
+  },
+  "codexShellEnvironment": {
+    "passthrough": []
+  },
+  "allow": [
+    "Read(~/projects/**)"
+  ],
+  "deny": [
+    "Read(**/.env)"
+  ],
+  "ask": []
+}

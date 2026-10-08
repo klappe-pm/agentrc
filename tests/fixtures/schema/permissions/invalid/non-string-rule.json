@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "allow": [{ "tool": "Bash" }],
+  "deny": [],
+  "ask": []
+}

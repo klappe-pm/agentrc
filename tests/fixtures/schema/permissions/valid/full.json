@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 2,
+  "defaultMode": "default",
+  "codexApprovalPolicy": "on-request",
+  "blockReadsOutsideWorkingDirectories": true,
+  "additionalDirectories": ["~/work"],
+  "runtimeDirectories": ["~/.example-runtime"],
+  "codexNetwork": {
+    "enabled": true,
+    "domains": { "**.example.com": "allow", "blocked.example.org": "deny" }
+  },
+  "codexShellEnvironment": { "passthrough": ["EXAMPLE_VAR", "PATH"] },
+  "allow": ["Read(~/work/**)", "Bash(git status)", "mcp__example__*"],
+  "deny": ["Read(**/.env)", "Bash(sudo *)"],
+  "ask": ["Edit(//etc/**)"],
+  "autoMode": {
+    "allow": ["$defaults", "Running the repository's own tests is routine work."]
+  }
+}

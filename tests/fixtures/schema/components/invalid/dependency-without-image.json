@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "name": "example-tool",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-tool",
+      "install": "apt-get install example-tool",
+      "version": "1.0.0"
+    }
+  ]
+}

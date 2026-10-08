@@ -1,0 +1,33 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        { "type": "command", "command": "$HOME/.example/hooks/example-guard.sh", "timeout": 3 }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Edit|Write",
+      "hooks": [
+        { "type": "command", "command": "$HOME/.example/hooks/example-format.sh", "timeout": 1.5, "statusMessage": "Formatting" }
+      ]
+    }
+  ],
+  "SessionStart": [
+    {
+      "hooks": [
+        { "type": "command", "command": "$HOME/.example/hooks/example-start.sh" }
+      ]
+    }
+  ],
+  "Stop": [],
+  "SubagentStop": [
+    {
+      "hooks": [
+        { "type": "command", "command": "$HOME/.example/hooks/example-stop.sh", "timeout": 10 }
+      ]
+    }
+  ]
+}
