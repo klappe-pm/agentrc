@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "$HOME/.cursor/hooks/block-database-commits.sh",
+        "matcher": "Shell",
+        "timeout": 3
+      }
+    ]
+  }
+}

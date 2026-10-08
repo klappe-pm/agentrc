@@ -1,0 +1,60 @@
+# Generated from permissions.json. Do not edit this output.
+
+[[rule]]
+toolName = "*"
+decision = "ask_user"
+priority = 1
+allowRedirection = true
+
+[[rule]]
+toolName = "read_file"
+decision = "allow"
+priority = 500
+argsPattern = "^\\~/projects/.*.*$"
+
+[[rule]]
+toolName = "run_shell_command"
+decision = "allow"
+priority = 500
+commandRegex = "^python3\\ \\-m\\ pytest\\ .*$"
+allowRedirection = true
+
+[[rule]]
+toolName = "run_shell_command"
+decision = "allow"
+priority = 500
+commandRegex = "^git\\ status$"
+allowRedirection = true
+
+[[rule]]
+toolName = "run_shell_command"
+decision = "allow"
+priority = 500
+commandRegex = "^git\\ diff\\ .*$"
+allowRedirection = true
+
+[[rule]]
+toolName = "read_file"
+decision = "deny"
+priority = 999
+argsPattern = "^.*.*/\\.env$"
+
+[[rule]]
+toolName = "write_file"
+decision = "deny"
+priority = 999
+argsPattern = "^.*.*/\\.env$"
+
+[[rule]]
+toolName = "run_shell_command"
+decision = "deny"
+priority = 999
+commandRegex = "^sudo\\ .*$"
+allowRedirection = true
+
+[[rule]]
+toolName = "run_shell_command"
+decision = "ask_user"
+priority = 750
+commandRegex = "^git\\ push\\ .*$"
+allowRedirection = true

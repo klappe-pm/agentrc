@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "defaultMode": "default",
+  "blockReadsOutsideWorkingDirectories": true,
+  "additionalDirectories": [],
+  "runtimeDirectories": [],
+  "allow": [
+    "Read(~/projects/notes-cli/**)",
+    "Edit(~/projects/notes-cli/**)",
+    "Bash(python3 -m pytest *)",
+    "Bash(git status)",
+    "Bash(git diff *)"
+  ],
+  "deny": [
+    "Read(**/.env)",
+    "Edit(**/.env)",
+    "Read(**/notes.db)",
+    "Edit(**/notes.db)",
+    "Bash(sudo *)"
+  ],
+  "ask": [
+    "Bash(git push *)",
+    "Bash(pip install *)"
+  ]
+}

@@ -23,4 +23,4 @@ This page describes the source root that `agentrc init` creates: each file and d
 | `agents/` | one Markdown file per subagent definition | every runtime with subagents |
 | `projects-root/` | one directory per managed project holding its project-local configuration | `agentrc` itself, when deploying into that project |
 
-Each directory the template creates holds a `README.md` describing the shape of the files that belong in it. The bundled template is the authority for that shape; [examples/minimal](../../examples/minimal) shows a populated one.
+Each directory the template creates holds a `README.md` describing the shape of the files that belong in it. The bundled template is the authority for that shape; [examples/notes-cli](../../examples/notes-cli/README.md) shows a populated one.

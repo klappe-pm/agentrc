@@ -1,0 +1,19 @@
+{
+  "general": {
+    "defaultApprovalMode": "default"
+  },
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.gemini/hooks/block-database-commits.sh",
+            "timeout": 3000
+          }
+        ]
+      }
+    ]
+  }
+}

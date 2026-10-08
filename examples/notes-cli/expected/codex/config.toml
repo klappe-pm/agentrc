@@ -1,0 +1,22 @@
+approval_policy = "on-request"
+default_permissions = "agentrc"
+
+# BEGIN agentrc permissions, generated from permissions.json
+[permissions.agentrc]
+extends = ":workspace"
+
+[permissions.agentrc.workspace_roots]
+"~/projects" = true
+"~/.claude" = true
+"~/.codex" = true
+"~/.gemini" = true
+"~/.cursor" = true
+"~/.config/opencode" = true
+
+[permissions.agentrc.filesystem.":workspace_roots"]
+"**/.env" = "deny"
+
+[permissions.agentrc.network]
+enabled = false
+
+# END agentrc permissions

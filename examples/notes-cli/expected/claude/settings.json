@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(~/projects/**)",
+      "Bash(python3 -m pytest *)",
+      "Bash(git status)",
+      "Bash(git diff *)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Edit(**/.env)",
+      "Bash(sudo *)"
+    ],
+    "ask": [
+      "Bash(git push *)"
+    ],
+    "defaultMode": "default",
+    "blockReadsOutsideWorkingDirectories": false,
+    "additionalDirectories": [
+      "~/projects",
+      "~/.claude",
+      "~/.codex",
+      "~/.gemini",
+      "~/.cursor",
+      "~/.config/opencode"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/block-database-commits.sh",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
