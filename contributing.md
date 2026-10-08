@@ -28,8 +28,17 @@ python3 -m pytest -m 'not slow'
 - Filenames and Markdown headings are lowercase kebab-case. Reserved names such as `README.md`, `AGENTS.md` and `LICENSE` keep their spelling.
 - Write one line per Markdown paragraph and list item; do not hard-wrap prose.
 - Documentation goes in `docs/` for people who use agentrc and `developer-docs/` for people who change it, in the folder the [documentation guide](docs/documentation-guide/README.md) names for its kind.
-- Never commit a secret, credential or `.env` file.
+- Never commit a secret, credential, private key, `.env` file or `settings.local.json`. `.env.example` with placeholder values is allowed.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
+## public-repository
+
+Everything committed here is visible to anyone, so treat every file, commit, pull request and comment as published.
+
+- Never add `models`, `providers` or `session-link` keys to the frontmatter of any Markdown file, and never add a session link anywhere: files, commit messages, pull request titles or bodies, or comments.
+- Never credit an agent, model, model provider or agent runtime as author or contributor in files, commits, pull requests or comments. No co-author trailers, no "generated with" lines, no session tokens comment on a pull request.
+- Agent instruction files and runtime directories at the repository root (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, `GEMINI.md`, `.claude/` and the like) are gitignored and never tracked; a contributor's own agent configuration stays on their machine. The copies under `agentrc/data/templates/` and `examples/` are product content and stay.
+- No process log is committed. When you observe friction in the work itself, end the commit message that carries the work with a section headed `Process observations:` followed by one or two line bulleted entries.
 
 ## pull-requests
 

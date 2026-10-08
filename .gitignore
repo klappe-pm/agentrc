@@ -34,3 +34,22 @@ settings.local.json
 
 # editor state
 .obsidian/
+
+# agent instruction files and runtime directories at the repository root:
+# generated per machine by the operator's own configuration engine, never
+# tracked here; the bundled template and the examples keep their own copies
+/AGENTS.md
+/CLAUDE.md
+/CODEX.md
+/GEMINI.md
+/OPENCODE.md
+/.claude/
+/.codex/
+/.gemini/
+/.cursor/
+/.opencode/
+/.agents/
+/llm-root-control-plane.md
+/.llm-root-deploy.json
+/.github/attribution-check/
+/.github/workflows/attribution-check-comment.yml
