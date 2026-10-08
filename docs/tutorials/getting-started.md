@@ -42,7 +42,7 @@ Open `~/agentrc-source/agentrc.toml`. One table per runtime names whether it is 
 
 ## add-a-rule-and-a-skill
 
-A rule is a Markdown file under `rules/` with an H1 equal to its filename stem and a `## binding` section. A skill is a directory under `skills/` holding a `SKILL.md` with `name` and `description` frontmatter. The README in each directory describes the shape, and [examples/minimal](../../examples/minimal) in the repository holds one of each.
+A rule is a Markdown file under `rules/` with an H1 equal to its filename stem and a `## binding` section. A skill is a directory under `skills/` holding a `SKILL.md` with `name` and `description` frontmatter. The README in each directory describes the shape, and the [notes-cli example](../../examples/notes-cli/README.md) in the repository is a complete source root that walks through every command with a rule, a hook, a skill, a command, an agent and a managed project.
 
 ## deploy
 

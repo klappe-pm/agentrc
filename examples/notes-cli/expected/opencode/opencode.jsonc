@@ -1,0 +1,27 @@
+{
+  "permission": {
+    "*": "ask",
+    "read": {
+      "~/projects/**": "allow",
+      "**/.env": "deny"
+    },
+    "bash": {
+      "python3 -m pytest *": "allow",
+      "git status": "allow",
+      "git diff *": "allow",
+      "git push *": "ask",
+      "sudo *": "deny"
+    },
+    "edit": {
+      "**/.env": "deny"
+    },
+    "external_directory": {
+      "~/projects/**": "allow",
+      "~/.claude/**": "allow",
+      "~/.codex/**": "allow",
+      "~/.gemini/**": "allow",
+      "~/.cursor/**": "allow",
+      "~/.config/opencode/**": "allow"
+    }
+  }
+}
