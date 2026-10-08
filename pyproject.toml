@@ -38,4 +38,6 @@ artifacts = ["agentrc/data/**"]
 testpaths = ["tests"]
 markers = [
     "slow: builds a wheel and installs it into a fresh virtual environment (deselect with -m 'not slow')",
+    "shell: a tests/**/*.test.sh file run with bash; fails on a non-zero exit",
+    "bun: a tests/**/*.test.ts file run with bun test; skipped when bun is not on PATH",
 ]
