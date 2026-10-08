@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "environments": {
+    "staging": { "description": "No ref." }
+  }
+}

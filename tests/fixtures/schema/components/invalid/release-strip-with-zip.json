@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "name": "example-release",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-release",
+      "install": "download the release archive",
+      "version": "1.0.0",
+      "image": {
+        "method": "release",
+        "url": "https://example.com/releases/{version}/example.zip",
+        "extract": "zip",
+        "strip": 1
+      }
+    }
+  ]
+}

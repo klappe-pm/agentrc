@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "platform_differences": [
+    {
+      "name": "example-difference",
+      "description": "A tool present only on Linux.",
+      "platform": "linux",
+      "paths": [".example/*"]
+    }
+  ]
+}

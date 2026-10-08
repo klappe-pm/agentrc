@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# commit-msg policy gate. Install by copying into .git/hooks/commit-msg, or
+# point core.hooksPath at agentrc/data/git-hooks.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+path="$REPO_ROOT/agentrc/data/git-hooks/strip-commit-attribution.sh"
+if [ ! -x "$path" ]; then
+  printf 'commit-msg: required check is unavailable: %s\n' "$path" >&2
+  exit 1
+fi
+"$path" "$1"

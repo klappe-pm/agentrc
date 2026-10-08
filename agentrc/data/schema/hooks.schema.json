@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "hooks/hooks.json",
+  "description": "The canonical hook registry: each event maps to hook groups, and each group to the commands it runs, in Claude Code's hook format.",
+  "$comment": "No dedicated validator reads this file; the schema encodes the shape the staging filter and the runtime adapters rely on. Event names are the canonical events every adapter declares; a sync refuses a runtime that does not map an event the registry uses. Hook objects stay open because adapters pass unknown keys through. Deliberately tighter than the code: type is fixed to command and timeout to a positive number, which no code checks but every adapter assumes.",
+  "type": "object",
+  "propertyNames": {
+    "enum": [
+      "PreToolUse",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "Stop",
+      "UserPromptSubmit",
+      "SessionStart",
+      "SubagentStart",
+      "SubagentStop"
+    ]
+  },
+  "additionalProperties": {
+    "type": "array",
+    "items": { "$ref": "#/$defs/group" }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "required": ["hooks"],
+      "properties": {
+        "matcher": {
+          "description": "Tool name pattern the group applies to; absent means every tool.",
+          "type": "string"
+        },
+        "hooks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/hook" }
+        }
+      }
+    },
+    "hook": {
+      "type": "object",
+      "required": ["type", "command"],
+      "properties": {
+        "type": { "const": "command" },
+        "command": { "type": "string", "minLength": 1 },
+        "timeout": {
+          "description": "Seconds; adapters convert it to the runtime's own unit.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "statusMessage": { "type": "string" }
+      }
+    }
+  }
+}

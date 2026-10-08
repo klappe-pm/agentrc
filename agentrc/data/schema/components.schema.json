@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "components.json",
+  "description": "The manifest of external components a source root declares: MCP servers, plugins, foreign hook groups, third-party skills, command-line dependencies, per-runtime settings, budgets, autonomy limits, platform differences, environments and promotion.",
+  "$comment": "The deploy and services sections are accepted without being described: both are operator extensions outside the engine schema. Checks the engine performs in code that a JSON Schema cannot express: entry names are unique within a section; platform_differences and deploy names are unique; a foreign hook's registration runtimes are a subset of its own runtimes; at most one promotion risk tier sets documentation to true; env values, environment defaults and plain variables are refused when the token-shaped detector matches them. The runtime names below mirror the adapter registry, which is the source of truth. Deliberately tighter than the code: budgets.tool_calls.per_tool values are counts, where the code would also accept nested objects beneath a tool name.",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "budgets": { "$ref": "#/$defs/budget" },
+    "autonomy": { "$ref": "#/$defs/autonomy" },
+    "runtime_settings": { "$ref": "#/$defs/runtimeSettings" },
+    "platform_differences": { "$ref": "#/$defs/platformDifferences" },
+    "environments": { "$ref": "#/$defs/environments" },
+    "promotion": { "$ref": "#/$defs/promotion" },
+    "deploy": true,
+    "services": true,
+    "mcp_servers": { "$ref": "#/$defs/section", "items": { "$ref": "#/$defs/mcpServer" } },
+    "plugins": { "$ref": "#/$defs/section", "items": { "$ref": "#/$defs/plugin" } },
+    "foreign_hooks": { "$ref": "#/$defs/section", "items": { "$ref": "#/$defs/foreignHook" } },
+    "third_party_skills": { "$ref": "#/$defs/section", "items": { "$ref": "#/$defs/thirdPartySkill" } },
+    "dependencies": { "$ref": "#/$defs/section", "items": { "$ref": "#/$defs/dependency" } }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nonEmptyStringList": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "stringList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "runtime": { "enum": ["claude", "codex", "cursor", "gemini", "opencode"] },
+    "platform": { "enum": ["darwin", "linux"] },
+    "count": {
+      "description": "A non-negative whole number, or null for unset.",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "budget": {
+      "description": "User-level budget defaults. Every leaf is a non-negative whole number or null; warn_at is a fraction.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "warn_at": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "turns": { "$ref": "#/$defs/count" },
+        "wall_minutes": { "$ref": "#/$defs/count" },
+        "tool_calls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "total": { "$ref": "#/$defs/count" },
+            "per_tool": {
+              "type": "object",
+              "propertyNames": { "minLength": 1 },
+              "additionalProperties": { "$ref": "#/$defs/count" }
+            }
+          }
+        },
+        "tokens": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "input": { "$ref": "#/$defs/count" },
+            "output": { "$ref": "#/$defs/count" },
+            "cache_read": { "$ref": "#/$defs/count" },
+            "cache_write": { "$ref": "#/$defs/count" },
+            "total": { "$ref": "#/$defs/count" }
+          }
+        },
+        "skills": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "count": { "$ref": "#/$defs/count" },
+            "tokens": { "$ref": "#/$defs/count" }
+          }
+        },
+        "mcp_servers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "count": { "$ref": "#/$defs/count" },
+            "tools": { "$ref": "#/$defs/count" }
+          }
+        },
+        "rules": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "words": { "$ref": "#/$defs/count" }
+          }
+        },
+        "hooks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "count": { "$ref": "#/$defs/count" }
+          }
+        },
+        "fleet": {
+          "description": "A machine-wide cap on live agents of one model: model and concurrent are set together or both null.",
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "model": { "type": ["string", "null"], "pattern": "\\S" },
+            "concurrent": { "type": ["integer", "null"], "minimum": 1 }
+          },
+          "anyOf": [
+            { "type": "null" },
+            {
+              "properties": {
+                "model": { "type": "null" },
+                "concurrent": { "type": "null" }
+              }
+            },
+            {
+              "required": ["model", "concurrent"],
+              "properties": {
+                "model": { "type": "string" },
+                "concurrent": { "type": "integer" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "autonomy": {
+      "description": "The dispatcher's limits.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "concurrency": { "type": "integer", "minimum": 1 },
+        "per_project": { "type": "integer", "minimum": 1 },
+        "interval_minutes": { "type": "integer", "minimum": 1 },
+        "daily_tokens": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "modelName": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "concreteModelName": {
+      "description": "A model name; runtimes other than claude refuse inherit and default.",
+      "$ref": "#/$defs/nonEmptyString",
+      "not": { "pattern": "^\\s*([Ii][Nn][Hh][Ee][Rr][Ii][Tt]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt])\\s*$" }
+    },
+    "aliases": {
+      "type": "object",
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "runtimeSettingsClaude": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "$ref": "#/$defs/modelName" },
+        "subagent_model": { "$ref": "#/$defs/modelName" },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "settings": { "type": "object" },
+        "environment_plugins": {
+          "type": "object",
+          "propertyNames": { "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/stringList" }
+        }
+      }
+    },
+    "runtimeSettingsOther": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "$ref": "#/$defs/concreteModelName" },
+        "subagent_model": { "$ref": "#/$defs/concreteModelName" },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "settings": { "type": "object" }
+      }
+    },
+    "runtimeSettingsOpencode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "$ref": "#/$defs/concreteModelName" },
+        "subagent_model": { "$ref": "#/$defs/concreteModelName" },
+        "aliases": { "$ref": "#/$defs/aliases" },
+        "settings": { "type": "object" },
+        "provider": {
+          "description": "A custom OpenAI-compatible provider: provider id to its configuration object.",
+          "type": "object",
+          "additionalProperties": { "type": "object" }
+        }
+      }
+    },
+    "runtimeSettings": {
+      "description": "Per-runtime model, subagent model, alias map and native settings passthrough.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "claude": { "$ref": "#/$defs/runtimeSettingsClaude" },
+        "codex": { "$ref": "#/$defs/runtimeSettingsOther" },
+        "cursor": { "$ref": "#/$defs/runtimeSettingsOther" },
+        "gemini": { "$ref": "#/$defs/runtimeSettingsOther" },
+        "opencode": { "$ref": "#/$defs/runtimeSettingsOpencode" }
+      }
+    },
+    "platformDifferences": {
+      "description": "What legitimately differs between platforms: the tests skipped elsewhere and the parity paths excused.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "platform"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "$ref": "#/$defs/nonEmptyString" },
+          "description": { "$ref": "#/$defs/nonEmptyString" },
+          "platform": { "$ref": "#/$defs/platform" },
+          "tests": { "$ref": "#/$defs/stringList" },
+          "paths": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^(home:|project:|runtime:)" }
+          }
+        }
+      }
+    },
+    "environments": {
+      "description": "Environment name to the ref it deploys from.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["ref"],
+        "additionalProperties": false,
+        "properties": {
+          "ref": { "$ref": "#/$defs/nonEmptyString" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "soakDays": {
+      "type": "number",
+      "minimum": 0
+    },
+    "promotion": {
+      "description": "The promotion gate: the default soak and the risk tiers changed paths are scored against.",
+      "type": "object",
+      "required": ["soak_days"],
+      "additionalProperties": false,
+      "properties": {
+        "soak_days": { "$ref": "#/$defs/soakDays" },
+        "description": { "type": "string" },
+        "risk_tiers": {
+          "type": "object",
+          "propertyNames": { "minLength": 1 },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["soak_days", "paths"],
+            "additionalProperties": false,
+            "properties": {
+              "soak_days": { "$ref": "#/$defs/soakDays" },
+              "paths": { "$ref": "#/$defs/nonEmptyStringList" },
+              "documentation": { "type": "boolean" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "section": {
+      "description": "A component section: a list of entries, or null for none.",
+      "type": ["array", "null"]
+    },
+    "commonEntry": {
+      "description": "The keys every component entry carries.",
+      "type": "object",
+      "required": ["name", "runtimes", "owner", "wanted"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "runtimes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/runtime" }
+        },
+        "owner": { "$ref": "#/$defs/nonEmptyString" },
+        "wanted": { "type": "boolean" },
+        "description": { "type": "string" }
+      }
+    },
+    "truthy": {
+      "not": { "enum": [null, false, 0, "", [], {}] }
+    },
+    "mcpServer": {
+      "$ref": "#/$defs/commonEntry",
+      "unevaluatedProperties": false,
+      "properties": {
+        "command": true,
+        "args": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
+        "env": {
+          "type": ["object", "null"],
+          "additionalProperties": { "type": "string" }
+        },
+        "cwd": true,
+        "url": true,
+        "transport": true,
+        "hosted": { "type": "boolean" }
+      },
+      "if": {
+        "required": ["hosted"],
+        "properties": { "hosted": { "const": true } }
+      },
+      "else": {
+        "properties": {
+          "name": { "pattern": "^[A-Za-z0-9_-]+$" }
+        },
+        "anyOf": [
+          { "required": ["command"], "properties": { "command": { "$ref": "#/$defs/truthy" } } },
+          { "required": ["url"], "properties": { "url": { "$ref": "#/$defs/truthy" } } }
+        ]
+      }
+    },
+    "plugin": {
+      "$ref": "#/$defs/commonEntry",
+      "unevaluatedProperties": false,
+      "properties": {
+        "marketplace": true,
+        "path": true
+      },
+      "if": { "required": ["path"] },
+      "then": {
+        "properties": {
+          "path": { "$ref": "#/$defs/nonEmptyString" },
+          "runtimes": { "const": ["opencode"] }
+        }
+      },
+      "else": {
+        "required": ["marketplace"],
+        "properties": {
+          "marketplace": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "foreignHook": {
+      "$ref": "#/$defs/commonEntry",
+      "unevaluatedProperties": false,
+      "required": ["match"],
+      "properties": {
+        "match": { "$ref": "#/$defs/nonEmptyString" },
+        "registration": {
+          "description": "Runtime to the captured file an adapter renders, relative to the source root.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/runtime" },
+          "additionalProperties": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      },
+      "if": {
+        "required": ["wanted"],
+        "properties": { "wanted": { "const": true } }
+      },
+      "else": {
+        "not": { "required": ["registration"] }
+      }
+    },
+    "thirdPartySkill": {
+      "$ref": "#/$defs/commonEntry",
+      "unevaluatedProperties": false,
+      "required": ["installer"],
+      "properties": {
+        "installer": { "$ref": "#/$defs/nonEmptyString" },
+        "skills": { "$ref": "#/$defs/nonEmptyStringList" }
+      }
+    },
+    "dependency": {
+      "$ref": "#/$defs/commonEntry",
+      "unevaluatedProperties": false,
+      "required": ["command", "install", "version", "image"],
+      "properties": {
+        "command": { "$ref": "#/$defs/nonEmptyString" },
+        "install": { "$ref": "#/$defs/nonEmptyString" },
+        "version": { "$ref": "#/$defs/nonEmptyString" },
+        "version_command": { "$ref": "#/$defs/nonEmptyString" },
+        "platform": { "$ref": "#/$defs/platform" },
+        "image": { "$ref": "#/$defs/image" }
+      }
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "image": {
+      "description": "How a dependency reaches the container image.",
+      "type": "object",
+      "required": ["method"],
+      "properties": {
+        "method": { "enum": ["base", "apt", "npm", "release", "source"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "method": { "const": "base" } } },
+          "then": {
+            "required": ["from"],
+            "additionalProperties": false,
+            "properties": {
+              "method": true,
+              "from": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "method": { "enum": ["apt", "npm"] } } },
+          "then": {
+            "required": ["package"],
+            "additionalProperties": false,
+            "properties": {
+              "method": true,
+              "package": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "method": { "const": "source" } } },
+          "then": {
+            "required": ["url", "sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "method": true,
+              "url": { "$ref": "#/$defs/versionedUrl" },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "method": { "const": "release" } } },
+          "then": {
+            "required": ["url", "extract"],
+            "additionalProperties": false,
+            "properties": {
+              "method": true,
+              "url": { "$ref": "#/$defs/versionedUrl" },
+              "extract": { "enum": ["tar", "tar-flat", "zip", "zip-strip"] },
+              "strip": { "type": ["integer", "null"], "enum": [0, 1, null] },
+              "binary": { "$ref": "#/$defs/nonEmptyString" },
+              "arch": {
+                "type": ["object", "null"],
+                "required": ["amd64", "arm64"],
+                "additionalProperties": false,
+                "properties": {
+                  "amd64": { "$ref": "#/$defs/nonEmptyString" },
+                  "arm64": { "$ref": "#/$defs/nonEmptyString" }
+                }
+              },
+              "sha256": {
+                "type": ["object", "null"],
+                "required": ["amd64", "arm64"],
+                "additionalProperties": false,
+                "properties": {
+                  "amd64": { "$ref": "#/$defs/sha256" },
+                  "arm64": { "$ref": "#/$defs/sha256" }
+                }
+              }
+            },
+            "if": {
+              "required": ["strip"],
+              "properties": { "strip": { "type": "integer" } }
+            },
+            "then": {
+              "properties": { "extract": { "const": "tar" } }
+            }
+          }
+        }
+      ]
+    },
+    "versionedUrl": {
+      "description": "A url template carrying {version}.",
+      "type": "string",
+      "pattern": "\\{version\\}"
+    }
+  }
+}

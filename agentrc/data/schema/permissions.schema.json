@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "permissions.json",
+  "description": "The single canonical permission policy, in Claude Code rule syntax, that adapters translate into each runtime's native enforcement surface.",
+  "$comment": "Unknown top-level keys are not rejected. defaultMode and blockReadsOutsideWorkingDirectories are passed through to the runtime without a check. Rule strings are not constrained to Tool(pattern) form: only Bash(...), Read(...) and Edit(...) rules are translated for runtimes other than Claude Code, and any other string passes through as written. additionalDirectories is checked only for being a list.",
+  "type": "object",
+  "required": ["schemaVersion", "allow", "deny", "ask"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "policyVersion": {
+      "description": "Bumped whenever the policy changes in a way an older checkout must not undo; a deploy refuses to write a lower version over a higher one.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "defaultMode": {
+      "description": "The runtime's default permission mode; bypassPermissions suppresses approval prompts for unmatched work."
+    },
+    "codexApprovalPolicy": { "enum": ["on-request", "never"] },
+    "blockReadsOutsideWorkingDirectories": {
+      "description": "Passed through to Claude Code's permissions object."
+    },
+    "additionalDirectories": {
+      "description": "Directories outside the working directory the policy treats as the user's own.",
+      "type": "array"
+    },
+    "runtimeDirectories": {
+      "description": "Runtime-owned configuration roots that must remain writable to agents.",
+      "$ref": "#/$defs/stringList"
+    },
+    "codexNetwork": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "domains": {
+          "description": "Host pattern to allow or deny.",
+          "type": "object",
+          "propertyNames": { "minLength": 1 },
+          "additionalProperties": { "enum": ["allow", "deny"] }
+        }
+      }
+    },
+    "codexShellEnvironment": {
+      "type": "object",
+      "properties": {
+        "passthrough": {
+          "description": "Environment variable names passed through to the shell.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }
+        }
+      }
+    },
+    "allow": { "$ref": "#/$defs/stringList" },
+    "deny": { "$ref": "#/$defs/stringList" },
+    "ask": { "$ref": "#/$defs/stringList" },
+    "autoMode": {
+      "description": "Claude Code's auto-mode guidance block, passed through whole.",
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

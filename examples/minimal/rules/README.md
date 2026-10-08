@@ -1,0 +1,3 @@
+# rules
+
+Rules are standing instructions every agent session follows. Each rule is one Markdown file named `<kebab-name>.md`, with no frontmatter, an H1 equal to the filename stem, and a `## binding` section holding the short normative text that `agentrc sync` renders into the rules digest of each runtime's instruction file; any further sections (rationale, examples, exceptions) stay in the full file, which the digest links to. A rule is rendered only once `rules/tiers.json` lists its filename under a tier: `global` rules apply everywhere and cannot be opted out, `common` rules apply globally by default, and `project` rules apply only where a project opts in through the control plane.

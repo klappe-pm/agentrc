@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "runtime_settings": {
+    "gemini": { "environment_plugins": { "local": ["example-plugin"] } }
+  }
+}

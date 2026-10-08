@@ -1,0 +1,29 @@
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# virtual environments
+.venv/
+venv/
+env/
+
+# build outputs
+build/
+dist/
+*.whl
+
+# secrets
+.env
+.env.*
+!.env.example
+settings.local.json
+
+# os
+.DS_Store

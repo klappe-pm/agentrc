@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "mcp_servers": [
+    {
+      "name": "example.server",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-mcp"
+    }
+  ]
+}

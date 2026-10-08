@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "foreign_hooks": [
+    {
+      "name": "example-hook",
+      "runtimes": ["claude"],
+      "owner": "example-tool",
+      "wanted": false,
+      "match": "example-tool hook",
+      "registration": { "claude": "hooks/foreign/example-claude.json" }
+    }
+  ]
+}

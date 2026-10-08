@@ -1,0 +1,3 @@
+{
+  "Stop": { "hooks": [{ "type": "command", "command": "$HOME/.example/hooks/example.sh" }] }
+}

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "name": "example-apt",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-apt",
+      "install": "apt-get install example-apt",
+      "version": "1.0.0",
+      "image": { "method": "apt", "package": "example-apt", "url": "https://example.com/{version}" }
+    }
+  ]
+}

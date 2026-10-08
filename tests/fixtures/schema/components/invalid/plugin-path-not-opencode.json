@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "name": "example-file-plugin",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "path": "plugins/example.js"
+    }
+  ]
+}

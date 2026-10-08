@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "name": "example-source",
+      "runtimes": ["claude"],
+      "owner": "example-owner",
+      "wanted": true,
+      "command": "example-source",
+      "install": "compile from the release tarball",
+      "version": "1.0.0",
+      "image": {
+        "method": "source",
+        "url": "https://example.com/src/example-{version}.tar.gz"
+      }
+    }
+  ]
+}

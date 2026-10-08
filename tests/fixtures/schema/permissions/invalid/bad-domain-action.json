@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "codexNetwork": { "enabled": true, "domains": { "example.com": "ask" } },
+  "allow": [],
+  "deny": [],
+  "ask": []
+}
