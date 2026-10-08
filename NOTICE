@@ -1,0 +1,102 @@
+agentrc
+Copyright (c) 2026 Kevin Lappe
+
+agentrc is licensed under the MIT License (see LICENSE). It includes material
+derived from the third-party projects listed below, each under its own license.
+The license text for each is in the licenses/ directory. Paths below are where
+each file will sit in agentrc once it ships.
+
+
+1. claude-plugins-official
+
+   Project:   anthropics/claude-plugins-official
+   URL:       https://github.com/anthropics/claude-plugins-official
+   License:   Apache License, Version 2.0 (licenses/apache-2.0.txt)
+   Holder:    The upstream LICENSE is the unmodified Apache 2.0 text with the
+              appendix placeholder left blank, and the repository carries no
+              NOTICE file, so no copyright holder line is stated upstream. The
+              repository is published by the GitHub organization "anthropics".
+
+   Files derived from it:
+
+     agents/agent-sdk-verifier-py.md   verbatim apart from added lines
+       (upstream: plugins/agent-sdk-dev/agents/)
+     agents/agent-sdk-verifier-ts.md   verbatim apart from added lines
+       (upstream: plugins/agent-sdk-dev/agents/)
+     agents/comment-analyzer.md        verbatim apart from added lines
+       (upstream: plugins/pr-review-toolkit/agents/)
+     agents/pr-test-analyzer.md        verbatim apart from added lines
+       (upstream: plugins/pr-review-toolkit/agents/)
+     agents/code-reviewer.md           modified
+       (upstream: plugins/pr-review-toolkit/agents/)
+     agents/code-simplifier.md         modified
+       (upstream: plugins/code-simplifier/agents/)
+     agents/silent-failure-hunter.md   modified
+       (upstream: plugins/pr-review-toolkit/agents/)
+     agents/type-design-analyzer.md    modified
+       (upstream: plugins/pr-review-toolkit/agents/)
+
+   "Verbatim apart from added lines" means the upstream text is unchanged and
+   lines were only added. Under Apache 2.0 section 4(b) that is still a
+   modification, so these files carry the same modified-file notice as the
+   files marked "modified" (see "Modified-file notices" below).
+
+
+2. obsidian-skills
+
+   Project:   kepano/obsidian-skills
+   URL:       https://github.com/kepano/obsidian-skills
+   License:   MIT License (licenses/mit-kepano.txt)
+   Holder:    Copyright (c) 2026 Steph Ango (@kepano), as stated in the
+              upstream LICENSE.
+
+   Files derived from it:
+
+     skills/defuddle/            modified
+     skills/obsidian-cli/        modified
+     skills/obsidian-bases/      modified (SKILL.md adapted; reference files
+                                 unchanged)
+     skills/obsidian-markdown/   modified (SKILL.md adapted; reference files
+                                 unchanged)
+
+
+3. andrej-karpathy-skills
+
+   Project:   forrestchang/andrej-karpathy-skills (the repository now
+              redirects to multica-ai/andrej-karpathy-skills)
+   URL:       https://github.com/multica-ai/andrej-karpathy-skills
+   License:   MIT License, as declared in the upstream README ("License: MIT")
+              and in the skill's frontmatter ("license: MIT")
+              (licenses/mit-forrestchang.txt)
+   Holder:    UNVERIFIED. The upstream repository has no LICENSE file and
+              states no copyright holder or year. The copyright line in
+              licenses/mit-forrestchang.txt is a marked placeholder until the
+              upstream holder is confirmed.
+
+   Files derived from it:
+
+     skills/karpathy-guidelines/SKILL.md   modified
+     skills/karpathy-guidelines/references/examples.md is original to agentrc
+       and is not derived from this project.
+
+
+Modified-file notices (Apache License 2.0, section 4(b))
+
+Section 4(b) of the Apache License 2.0 requires that any modified file
+distributed as part of a Derivative Work carry a prominent notice stating that
+it was changed. Each file in section 1 above will carry the following notice
+when it ships, placed right after its YAML frontmatter as an HTML comment so it
+stays in the source without changing how the file renders:
+
+  <!--
+  Derived from <upstream path> in anthropics/claude-plugins-official
+  (https://github.com/anthropics/claude-plugins-official),
+  licensed under the Apache License, Version 2.0 (licenses/apache-2.0.txt).
+  Modified for agentrc: <one line describing the change>.
+  -->
+
+For a file listed as "verbatim apart from added lines", the change line reads
+"Modified for agentrc: lines added; upstream text unchanged." Files derived
+from the MIT-licensed projects in sections 2 and 3 need no per-file notice.
+Their license and copyright notice travel with agentrc in the licenses/
+directory and in this file.
