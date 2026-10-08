@@ -17,9 +17,9 @@ This repository is public under MIT. Everything committed here is visible to any
 
 Never commit a secret, credential, private key, `.env` file or `settings.local.json`. `.env.example` with placeholder values is allowed.
 
-## process-log
+## process-observations
 
-At session start, read [COMMENTS-PROCESS.md](COMMENTS-PROCESS.md). When you observe friction in the extraction process itself, append one dated line per observation under its `entries` section in the form `- YYYY-MM-DD: <one or two lines>`. Never edit or remove an existing entry.
+No process log is committed in this repository. When you observe friction in the work itself, record it in the commit that carries the work: end the commit message with a section headed `Process observations:` followed by a bulleted list of one or two line entries. The same entries may be aggregated in `.docs/`, which is gitignored and never published.
 
 ## tests
 
@@ -28,6 +28,10 @@ Run the test suite before every commit:
 ```bash
 python3 -m pytest
 ```
+
+## documentation
+
+Documentation lives in three places. `docs/` is for people who use agentrc, `developer-docs/` is for people who change it, and `.docs/` is gitignored internal work product (prompts, questions, provenance, session notes, hook snapshots) that is never published. Inside `docs/` and `developer-docs/` every page is one Diátaxis kind and sits in the folder for that kind: `tutorials/`, `how-to-guides/`, `reference/` or `explanation/`; a page that would be two kinds is two pages. [docs/documentation-guide/README.md](docs/documentation-guide/README.md) has the full rule.
 
 ## runtime-assets
 

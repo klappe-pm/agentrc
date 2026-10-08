@@ -27,3 +27,10 @@ settings.local.json
 
 # os
 .DS_Store
+
+# internal work product: prompts, questions, provenance, session notes and
+# any snapshot a hook writes; never published
+.docs/
+
+# editor state
+.obsidian/

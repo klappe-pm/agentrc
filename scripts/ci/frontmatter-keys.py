@@ -2,9 +2,10 @@
 """Fail when any Markdown file's frontmatter carries a provenance key.
 
 A public repository never records session provenance. This check walks every
-tracked and untracked, non-ignored Markdown file and fails on a `models`,
-`providers` or `session-link` key in its leading frontmatter, so a stripped
-key cannot return through a later pull request. Exit 0 clean, 1 on a hit.
+tracked and untracked, non-ignored Markdown file, which covers every page
+under docs/ and developer-docs/, and fails on a `models`, `providers` or
+`session-link` key in its leading frontmatter, so a stripped key cannot
+return through a later pull request. Exit 0 clean, 1 on a hit.
 """
 
 from __future__ import annotations

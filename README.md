@@ -38,21 +38,14 @@ cd ~/agentrc-source && agentrc sync
 
 ## documentation
 
-- [getting started](docs/getting-started.md)
-- [install](docs/install.md)
-- [migrating](docs/migrating.md)
-- [configuration](docs/configuration.md)
-- [cli reference](docs/cli-reference.md)
-- [troubleshooting](docs/troubleshooting.md)
-- [architecture](docs/architecture.md)
-- [source layout](docs/source-layout.md)
-- [adding a runtime](docs/adding-a-runtime.md)
-- [security model](docs/security-model.md)
-- [runtimes](docs/runtimes/README.md)
+Two trees, one per audience, each arranged by [Diátaxis](https://diataxis.fr/) quadrant: tutorials, how-to guides, reference and explanation.
 
-## contributing
+- I use agentrc, where do I start: [getting started](docs/tutorials/getting-started.md), then the rest of [docs](docs/README.md).
+- I change agentrc, where do I start: [first contribution](developer-docs/tutorials/first-contribution.md), then the rest of [developer-docs](developer-docs/README.md).
 
-See [contributing.md](contributing.md). Report vulnerabilities privately as described in [security.md](security.md).
+## support-and-contributing
+
+[support.md](support.md) says where to ask for help and where to file an issue. [contributing.md](contributing.md) holds the contribution guidelines. Report vulnerabilities privately as described in [security.md](security.md).
 
 ## license
 

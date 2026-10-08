@@ -29,7 +29,7 @@ _log_emit() {
 log_info() { _log_emit INFO "$*"; }
 log_warn() { _log_emit WARN "$*"; }
 log_error() { _log_emit ERROR "$*"; }
-log_debug() { [ "${RUNTIME_DEBUG:-0}" = "1" ] && _log_emit DEBUG "$*" || true; }
+log_debug() { if [ "${RUNTIME_DEBUG:-0}" = "1" ]; then _log_emit DEBUG "$*" || true; fi; }
 
 # --- secret scan ---------------------------------------------------------------
 
