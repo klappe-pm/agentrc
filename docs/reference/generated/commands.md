@@ -51,6 +51,12 @@ Global options are accepted before or after the command.
 | [`provider`](#provider) | manage inference providers |
 | [`adapter`](#adapter) | manage the translators from the source to a runtime |
 | [`api`](#api) | serve the read-only local API, or print its published schema |
+| [`source`](#source) | the source root: where it lives, which one is active |
+| [`project`](#project) | managed projects and their overrides |
+| [`runtime`](#runtime) | the supported agent runtimes and where each deploys |
+| [`agent`](#agent) | per-agent settings inside a project or the source root |
+| [`account`](#account) | named accounts and the settings tied to them |
+| [`ui`](#ui) | open the full-screen terminal interface (needs the ui extra) |
 
 ## init
 
@@ -585,3 +591,39 @@ stratarc adapter deprecate name [--reason REASON] [--end-date YYYY-MM-DD] [--rep
 serve the read-only local API, or print its published schema.
 
 This command forwards its arguments to its own parser. Run `stratarc api --help` for them.
+
+## source
+
+the source root: where it lives, which one is active.
+
+This command forwards its arguments to its own parser. Run `stratarc source --help` for them.
+
+## project
+
+managed projects and their overrides.
+
+This command forwards its arguments to its own parser. Run `stratarc project --help` for them.
+
+## runtime
+
+the supported agent runtimes and where each deploys.
+
+This command forwards its arguments to its own parser. Run `stratarc runtime --help` for them.
+
+## agent
+
+per-agent settings inside a project or the source root.
+
+This command forwards its arguments to its own parser. Run `stratarc agent --help` for them.
+
+## account
+
+named accounts and the settings tied to them.
+
+This command forwards its arguments to its own parser. Run `stratarc account --help` for them.
+
+## ui
+
+open the full-screen terminal interface (needs the ui extra).
+
+This command forwards its arguments to its own parser. Run `stratarc ui --help` for them.

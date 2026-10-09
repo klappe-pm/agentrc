@@ -45,14 +45,28 @@ RESOURCES = {
     "provider": "manage inference providers",
     "adapter": "manage the translators from the source to a runtime",
     "api": "serve the read-only local API, or print its published schema",
+    "source": "the source root: where it lives, which one is active",
+    "project": "managed projects and their overrides",
+    "runtime": "the supported agent runtimes and where each deploys",
+    "agent": "per-agent settings inside a project or the source root",
+    "account": "named accounts and the settings tied to them",
+    "ui": "open the full-screen terminal interface (needs the ui extra)",
 }
 
-# The verbs of each resource that write to the home, so the home is checked first.
+# The resources whose module (`stratarc.resources_cmd`) takes the resource name as its first argument.
+RESOURCES_CMD = ("source", "project", "runtime", "agent", "account")
+
+# The verbs of each resource that write to the home, so the home is checked first. A dry run writes nothing and is not checked.
 WRITING_VERBS = {
     "log": {"enable", "disable", "prune"},
     "verify": {"run"},
     "provider": {"add", "edit", "remove"},
     "adapter": {"register", "add", "remove", "deprecate"},
+    "source": {"init", "use", "move"},
+    "project": {"add", "edit", "remove", "enable", "disable"},
+    "runtime": {"enable", "disable", "target"},
+    "agent": {"edit"},
+    "account": {"add", "edit", "remove"},
 }
 
 EXIT_NAMES = {
@@ -321,6 +335,10 @@ def _resource_main(resource: str) -> Callable[[list[str] | None], int]:
         from stratarc import providers
 
         return providers.main
+    if resource in RESOURCES_CMD:
+        from stratarc import resources_cmd
+
+        return lambda argv: resources_cmd.main([resource, *(argv or [])])
     from stratarc import registry
 
     return registry.main
@@ -388,7 +406,7 @@ def cmd_resource(args: argparse.Namespace, rest: list[str]) -> int:
     if not asking_for_help:
         if resource == "verify" and verb == "run":
             _require_source_root()
-        if verb in WRITING_VERBS.get(resource, set()):
+        if verb in WRITING_VERBS.get(resource, set()) and "--dry-run" not in rest:
             _require_writable_home()
     argv = list(rest) + (["--json"] if args.global_flags.json and not asking_for_help else [])
     entry = _resource_main(resource)
@@ -440,6 +458,19 @@ def cmd_api(args: argparse.Namespace, rest: list[str]) -> int:
             error = _error_body(mapped) if mapped is not None else {**error, "code": found.group("code"), "message": found.group("message")}
         print(_envelope(False, None, error))
     return code
+
+
+def cmd_ui(args: argparse.Namespace, rest: list[str]) -> int:
+    """Forward `ui` to the terminal interface; without the extra, show the catalog message and exit 5.
+
+    The interface owns the terminal, so nothing it prints is captured. The global `--root` reaches it through the environment the flags set.
+    """
+    from stratarc import ui
+
+    asking_for_help = any(flag in rest for flag in ("-h", "--help"))
+    if not asking_for_help and not ui.textual_available():
+        raise CliError("msg-1153", param="ui")
+    return _call(ui.main, list(rest))
 
 
 def _call(entry: Callable[[list[str] | None], int], argv: list[str]) -> int:
@@ -570,6 +601,8 @@ def main(argv: list[str] | None = None) -> int:
         with _environment(_flag_environment(flags)):
             if args.command == "api":
                 return cmd_api(args, forwarded)
+            if args.command == "ui":
+                return cmd_ui(args, forwarded)
             if args.command in RESOURCES:
                 return cmd_resource(args, forwarded)
             if args.command in PASSTHROUGH or not hasattr(args, "func"):

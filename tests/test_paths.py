@@ -76,6 +76,79 @@ def test_source_root_defaults_to_cwd(monkeypatch, tmp_path):
     assert paths.source_root() == bare.resolve()
 
 
+def _register(tmp_path: Path) -> Path:
+    """Write <home>/.stratarc/sources.toml the way `stratarc source use` does and return the registered directory."""
+    registered = tmp_path / "registered"
+    registered.mkdir(parents=True, exist_ok=True)
+    layout = tmp_path / "home" / ".stratarc"
+    layout.mkdir(parents=True, exist_ok=True)
+    (layout / "sources.toml").write_text(f'schema_version = 1\nactive = "main"\n\n[sources.main]\npath = "{registered}"\n')
+    return registered
+
+
+def test_source_root_uses_the_active_registered_source_after_discovery_fails(tmp_path):
+    registered = _register(tmp_path)
+    assert paths.source_root() == registered.resolve()
+
+
+def test_source_root_explicit_and_environment_beat_the_active_source(monkeypatch, tmp_path):
+    _register(tmp_path)
+    (tmp_path / "env").mkdir()
+    assert paths.source_root(tmp_path / "flag") == (tmp_path / "flag").resolve()
+    monkeypatch.setenv("STRATARC_SOURCE", str(tmp_path / "env"))
+    assert paths.source_root() == (tmp_path / "env").resolve()
+
+
+def test_source_root_nearest_config_beats_the_active_source(monkeypatch, tmp_path):
+    _register(tmp_path)
+    here = tmp_path / "here"
+    here.mkdir()
+    (here / "stratarc.toml").write_text("")
+    monkeypatch.chdir(here)
+    assert paths.source_root() == here.resolve()
+
+
+def test_source_root_follows_the_home_override_for_the_active_source(monkeypatch, tmp_path):
+    other = tmp_path / "other-home"
+    (other / ".stratarc").mkdir(parents=True)
+    target = tmp_path / "elsewhere"
+    target.mkdir()
+    (other / ".stratarc" / "sources.toml").write_text(f'active = "main"\n[sources.main]\npath = "{target}"\n')
+    monkeypatch.setenv("STRATARC_HOME", str(other))
+    assert paths.source_root() == target.resolve()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "this is = = not toml",
+        'schema_version = 99\nactive = "main"\n[sources.main]\npath = "{target}"\n',
+        '[sources.main]\npath = "{target}"\n',
+        'active = "ghost"\n[sources.main]\npath = "{target}"\n',
+        'active = "main"\n[sources.main]\npath = 7\n',
+    ],
+)
+def test_source_root_ignores_an_unusable_sources_file(tmp_path, content):
+    target = tmp_path / "registered"
+    target.mkdir()
+    layout = tmp_path / "home" / ".stratarc"
+    layout.mkdir(parents=True)
+    (layout / "sources.toml").write_text(content.format(target=target))
+    assert paths.source_root() == tmp_path.resolve()
+
+
+def test_source_root_ignores_an_active_source_whose_directory_is_gone(tmp_path):
+    registered = _register(tmp_path)
+    registered.rmdir()
+    assert paths.source_root() == tmp_path.resolve()
+
+
+def test_the_sources_schema_ceiling_matches_the_home_layout():
+    from stratarc import home_layout
+
+    assert paths._SOURCES_SCHEMA == home_layout.SCHEMA_VERSION
+
+
 def test_projects_root_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(tmp_path / "work"))
     assert paths.projects_root() == tmp_path / "work"

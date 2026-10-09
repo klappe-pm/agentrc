@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from stratarc import __version__, cli, messages
+from stratarc import __version__, cli, messages, paths
 from stratarc.cli import PASSTHROUGH, TEMPLATE, main
 from stratarc.resources import data_dir
 from conftest import REPO_ROOT, tree_snapshot
@@ -495,6 +495,9 @@ def test_every_module_code_resolves_to_a_catalog_message():
         "adapter-exists", "deprecation-reason", "deprecation-date", "deprecation-unknown", "runtime-version",
         "provider-invalid", "provider-name", "provider-unknown", "provider-unreadable", "provider-exists",
         "model-unknown", "invalid-input", "unavailable",
+        "invalid-edit", "no-editor", "needs-yes", "source-not-found", "invalid-name", "invalid-value", "invalid-path",
+        "invalid-config", "project-exists", "account-exists", "source-exists", "path-exists", "not-reconciled",
+        "editor-failed", "ui-extra-missing", "conflict",
     }
     assert wanted == set(messages.CODE_MESSAGES)
 
@@ -506,12 +509,14 @@ def test_every_module_code_is_raised_by_a_module_and_every_message_has_two_sente
     for message in messages.CATALOG.values():
         assert message.problem.endswith((".", "}")) and message.recovery.endswith("."), message.id
     ids = sorted(messages.CATALOG)
-    assert ids == sorted(set(ids)) and ids[-1] == "msg-1138"
-
+    assert ids == sorted(set(ids)) and ids[-1] == "msg-1154"
 
 def test_a_conflict_code_keeps_its_exit_status():
-    assert messages.from_code("adapter-exists", "x").exit == messages.CONFLICT
-    assert messages.from_code("provider-exists", "x").exit == messages.CONFLICT
+    for code in ("adapter-exists", "provider-exists", "project-exists", "account-exists", "source-exists", "path-exists", "conflict"):
+        assert messages.from_code(code, "x").exit == messages.CONFLICT, code
+    assert messages.from_code("not-reconciled", "x").exit == messages.UNAVAILABLE
+    assert messages.from_code("ui-extra-missing", "x").exit == messages.UNAVAILABLE
+    assert messages.from_code("editor-failed", "x").exit == messages.FAILURE
     assert messages.from_code("unavailable", "x").exit == messages.UNAVAILABLE
     assert messages.from_code("invalid-input", "x").exit == messages.INVALID_INPUT
 
@@ -520,7 +525,7 @@ def test_from_code_fills_the_detail_and_ignores_an_unknown_code():
     error = messages.from_code("unknown-key", 'No layer sets "x".', param="x")
     assert error is not None and error.id == "msg-1105" and error.param == "x"
     assert error.problem == 'No layer sets the key: No layer sets "x".'
-    assert messages.from_code("conflict", "x") is None
+    assert messages.from_code("no-such-code", "x") is None
 
 
 # ----- the resource commands forward to their modules -----
@@ -614,7 +619,7 @@ def test_a_module_code_is_shown_as_its_catalog_message_in_text(ready, monkeypatc
 
 
 def test_a_code_without_a_catalog_entry_is_shown_as_the_module_wrote_it(ready, monkeypatch, capsys):
-    body = {"code": "conflict", "message": "It exists.", "param": "name", "hint": "Remove it."}
+    body = {"code": "module-private-code", "message": "It exists.", "param": "name", "hint": "Remove it."}
     monkeypatch.setattr("stratarc.providers.main", fake_module(body, 4))
 
     assert main(["--json", "provider", "add", "p", "--endpoint", "https://x.example"]) == 4
@@ -666,7 +671,7 @@ def test_a_reading_verb_runs_without_a_writable_home(source_root, tmp_path, monk
     assert recorder.calls == [["list"]]
 
 
-@pytest.mark.parametrize("command", [["config"], ["log"], ["verify"], ["provider"], ["adapter"], ["log", "frobnicate"], ["provider", "add"]])
+@pytest.mark.parametrize("command", [["config"], ["log"], ["verify"], ["provider"], ["adapter"], ["log", "frobnicate"], ["provider", "add"], ["source"], ["project", "frobnicate"], ["account", "add"]])
 def test_json_mode_prints_one_envelope_even_when_the_module_prints_none(ready, capsys, command):
     assert main(["--json", *command]) == 2
 
@@ -904,3 +909,154 @@ def test_help_lists_the_api_command(capsys):
     with pytest.raises(SystemExit):
         main(["--help"])
     assert re.search(r"\bapi\b", capsys.readouterr().out)
+
+
+# ----- the source, project, runtime, agent and account resources -----
+
+
+@pytest.mark.parametrize(
+    ("command", "forwarded"),
+    [
+        (["source", "list"], ["source", "list"]),
+        (["source", "use", "main"], ["source", "use", "main"]),
+        (["project", "add", "notes", "--dry-run"], ["project", "add", "notes", "--dry-run"]),
+        (["runtime", "target", "claude", "~/.claude-x"], ["runtime", "target", "claude", "~/.claude-x"]),
+        (["agent", "show", "writer", "--project", "notes"], ["agent", "show", "writer", "--project", "notes"]),
+        (["account", "add", "work", "--set", "permissions.timeout=60"], ["account", "add", "work", "--set", "permissions.timeout=60"]),
+        (["--json", "account", "list"], ["account", "list", "--json"]),
+    ],
+)
+def test_resource_verbs_reach_resources_cmd_prefixed_with_the_resource(ready, monkeypatch, command, forwarded):
+    recorder = patch_main(monkeypatch, "resources_cmd")
+
+    assert main(command) == 0
+    assert recorder.calls == [forwarded]
+
+
+@pytest.mark.parametrize("command", [["source", "use", "x"], ["source", "init", "p"], ["project", "add", "x"], ["runtime", "enable", "claude"], ["agent", "edit", "a"], ["account", "remove", "a"]])
+def test_a_writing_resource_verb_needs_a_writable_home(source_root, tmp_path, monkeypatch, capsys, command):
+    monkeypatch.setenv("STRATARC_HOME", str(tmp_path / "absent-home"))
+    recorder = patch_main(monkeypatch, "resources_cmd")
+
+    assert main(command) == 3
+    assert "msg-1003" in capsys.readouterr().err
+    assert recorder.calls == []
+
+
+def test_a_dry_run_and_a_reading_verb_need_no_writable_home(source_root, tmp_path, monkeypatch):
+    monkeypatch.setenv("STRATARC_HOME", str(tmp_path / "absent-home"))
+    recorder = patch_main(monkeypatch, "resources_cmd")
+
+    assert main(["project", "add", "x", "--dry-run"]) == 0
+    assert main(["project", "list"]) == 0
+    assert len(recorder.calls) == 2
+
+
+def test_resource_error_codes_are_shown_as_catalog_messages(ready, monkeypatch, capsys):
+    cases = {
+        "needs-yes": ("msg-1141", 2), "invalid-edit": ("msg-1139", 2), "no-editor": ("msg-1140", 2), "source-not-found": ("msg-1142", 2),
+        "invalid-name": ("msg-1143", 2), "invalid-value": ("msg-1144", 2), "invalid-path": ("msg-1145", 2), "invalid-config": ("msg-1146", 2),
+        "project-exists": ("msg-1147", 4), "account-exists": ("msg-1148", 4), "source-exists": ("msg-1149", 4), "path-exists": ("msg-1150", 4),
+        "not-reconciled": ("msg-1151", 5), "editor-failed": ("msg-1152", 1), "conflict": ("msg-1154", 4),
+        "unknown-project": ("msg-1106", 2), "unknown-agent": ("msg-1107", 2), "unknown-account": ("msg-1108", 2), "unknown-runtime": ("msg-1109", 2),
+        "source-root-missing": ("msg-1110", 2), "home-unwritable": ("msg-1118", 3),
+    }
+    for code, (message_id, status) in cases.items():
+        body = {"code": code, "message": "Module wording.", "param": "name", "hint": "Module hint."}
+        monkeypatch.setattr("stratarc.resources_cmd.main", fake_module(body, status))
+        assert main(["--json", "project", "show", "x"]) == status, code
+        error = json.loads(capsys.readouterr().out)["error"]
+        assert error["code"] == message_id and "Module wording." in error["message"], code
+        assert error["hint"] == messages.CATALOG[message_id].recovery
+
+
+def test_removing_a_project_without_yes_is_msg_1141_for_real(ready, capsys):
+    assert main(["project", "add", "notes"]) == 0
+    capsys.readouterr()
+
+    assert main(["project", "remove", "notes"]) == 2
+
+    assert "error msg-1141" in capsys.readouterr().err
+    assert (ready / "projects-root" / "notes").is_dir()
+
+
+def test_adding_a_project_twice_is_a_conflict_msg_1147_for_real(ready, capsys):
+    assert main(["project", "add", "notes"]) == 0
+    capsys.readouterr()
+
+    assert main(["project", "add", "notes"]) == 4
+    assert "error msg-1147" in capsys.readouterr().err
+
+
+def test_source_use_is_read_by_the_next_command_with_no_flag_variable_or_config(stratarc_home, tmp_path, monkeypatch, capsys):
+    """The defect: `source use` wrote sources.toml and nothing else read it."""
+    monkeypatch.delenv("STRATARC_SOURCE", raising=False)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    target = tmp_path / "registered-source"
+
+    assert main(["source", "init", str(target), "--name", "main", "--use"]) == 0
+    capsys.readouterr()
+    assert main(["--json", "source", "show"]) == 0
+    assert json.loads(capsys.readouterr().out)["data"]["root"] == str(target.resolve())
+    assert paths.source_root() == target.resolve()
+
+
+def test_the_starc_script_name_points_at_the_same_entry_point():
+    import tomllib
+
+    scripts = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
+    assert scripts["starc"] == "stratarc.cli:main"
+    assert scripts["stratarc"] == scripts["starc"]
+
+
+# ----- the ui command -----
+
+
+def test_ui_forwards_its_arguments_and_the_global_root(ready, monkeypatch):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: True)
+    seen: dict[str, str] = {}
+    recorder = Recorder(0)
+
+    def record(argv=None) -> int:
+        seen["root"] = os.environ.get("STRATARC_SOURCE", "")
+        return recorder(argv)
+
+    monkeypatch.setattr("stratarc.ui.main", record)
+    assert main(["--root", str(ready), "ui"]) == 0
+    assert recorder.calls == [[]] and seen["root"] == str(ready.resolve())
+
+
+def test_ui_passes_a_nonzero_status_through(ready, monkeypatch):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: True)
+    for status in (5, 130):
+        patch_main(monkeypatch, "ui", status)
+        assert main(["ui"]) == status
+
+
+def test_ui_without_the_extra_is_msg_1153_and_exit_5(ready, monkeypatch, capsys):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: False)
+    recorder = patch_main(monkeypatch, "ui")
+
+    assert main(["ui"]) == 5
+
+    err = capsys.readouterr().err
+    assert err.startswith("error msg-1153") and "pip install 'stratarc[ui]'" in err
+    assert recorder.calls == []
+
+
+def test_ui_without_the_extra_is_one_json_envelope(ready, monkeypatch, capsys):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: False)
+
+    assert main(["--json", "ui"]) == 5
+
+    body = json.loads(capsys.readouterr().out)
+    assert body["ok"] is False and body["error"]["code"] == "msg-1153"
+
+
+def test_ui_help_works_without_the_extra(monkeypatch, capsys):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: False)
+
+    assert main(["ui", "--help"]) == 0
+    assert "stratarc ui" in capsys.readouterr().out

@@ -54,6 +54,22 @@ Every message the command line can print, generated from `stratarc/messages.py`.
 | [`msg-1136`](#msg-1136) | 2 invalid-input | The provider does not serve the model: {detail} |
 | [`msg-1137`](#msg-1137) | 2 invalid-input | The command was given input it cannot use: {detail} |
 | [`msg-1138`](#msg-1138) | 5 unavailable | The data the command needs is not available: {detail} |
+| [`msg-1139`](#msg-1139) | 2 invalid-input | The edit would leave the file invalid: {detail} |
+| [`msg-1140`](#msg-1140) | 2 invalid-input | No editor is configured to edit the file: {detail} |
+| [`msg-1141`](#msg-1141) | 2 invalid-input | The command deletes files and needs confirmation: {detail} |
+| [`msg-1142`](#msg-1142) | 2 invalid-input | The source root is not registered or no longer exists: {detail} |
+| [`msg-1143`](#msg-1143) | 2 invalid-input | The name cannot be used: {detail} |
+| [`msg-1144`](#msg-1144) | 2 invalid-input | The value cannot be used: {detail} |
+| [`msg-1145`](#msg-1145) | 2 invalid-input | The path cannot be used: {detail} |
+| [`msg-1146`](#msg-1146) | 2 invalid-input | The configuration cannot be used: {detail} |
+| [`msg-1147`](#msg-1147) | 4 conflict | The project already exists: {detail} |
+| [`msg-1148`](#msg-1148) | 4 conflict | The account already exists: {detail} |
+| [`msg-1149`](#msg-1149) | 4 conflict | The source name is already registered: {detail} |
+| [`msg-1150`](#msg-1150) | 4 conflict | The path already exists and is not empty: {detail} |
+| [`msg-1151`](#msg-1151) | 5 unavailable | The control plane has no entry for the project: {detail} |
+| [`msg-1152`](#msg-1152) | 1 failure | The editor did not finish: {detail} |
+| [`msg-1153`](#msg-1153) | 5 unavailable | The terminal interface needs Textual, which is not installed. |
+| [`msg-1154`](#msg-1154) | 4 conflict | The change conflicts with what already exists: {detail} |
 
 ## messages
 
@@ -500,3 +516,163 @@ Problem: The data the command needs is not available: {detail}
 Recovery: Run the command that produces it first, or check that the path exists and can be read.
 
 Raised for the module code `unavailable`.
+
+### msg-1139
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The edit would leave the file invalid: {detail}
+
+Recovery: Fix the listed problems and run the command again, the file was left unchanged.
+
+Raised for the module code `invalid-edit`.
+
+### msg-1140
+
+Ends the command with status 2 (invalid-input).
+
+Problem: No editor is configured to edit the file: {detail}
+
+Recovery: Set $EDITOR or $VISUAL, then run the command again.
+
+Raised for the module code `no-editor`.
+
+### msg-1141
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The command deletes files and needs confirmation: {detail}
+
+Recovery: Pass --yes to confirm, or --dry-run to preview.
+
+Raised for the module code `needs-yes`.
+
+### msg-1142
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The source root is not registered or no longer exists: {detail}
+
+Recovery: Run `stratarc source list` for the registered ones, or register one with `stratarc source init`.
+
+Raised for the module code `source-not-found`.
+
+### msg-1143
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The name cannot be used: {detail}
+
+Recovery: Use lowercase letters, digits and hyphens, starting with a letter.
+
+Raised for the module code `invalid-name`.
+
+### msg-1144
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The value cannot be used: {detail}
+
+Recovery: Check the value against `stratarc COMMAND --help`, then run the command again.
+
+Raised for the module code `invalid-value`.
+
+### msg-1145
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The path cannot be used: {detail}
+
+Recovery: Choose a path the command allows, which `stratarc COMMAND --help` describes.
+
+Raised for the module code `invalid-path`.
+
+### msg-1146
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The configuration cannot be used: {detail}
+
+Recovery: Fix stratarc.toml in the source root, then run the command again.
+
+Raised for the module code `invalid-config`.
+
+### msg-1147
+
+Ends the command with status 4 (conflict).
+
+Problem: The project already exists: {detail}
+
+Recovery: Change it with `stratarc project edit`, or pick another name.
+
+Raised for the module code `project-exists`.
+
+### msg-1148
+
+Ends the command with status 4 (conflict).
+
+Problem: The account already exists: {detail}
+
+Recovery: Change it with `stratarc account edit`, or pick another name.
+
+Raised for the module code `account-exists`.
+
+### msg-1149
+
+Ends the command with status 4 (conflict).
+
+Problem: The source name is already registered: {detail}
+
+Recovery: Choose another --name, or use `stratarc source use`.
+
+Raised for the module code `source-exists`.
+
+### msg-1150
+
+Ends the command with status 4 (conflict).
+
+Problem: The path already exists and is not empty: {detail}
+
+Recovery: Choose a new or empty directory.
+
+Raised for the module code `path-exists`.
+
+### msg-1151
+
+Ends the command with status 5 (unavailable).
+
+Problem: The control plane has no entry for the project: {detail}
+
+Recovery: Run `stratarc reconcile` to add it, then run the command again.
+
+Raised for the module code `not-reconciled`.
+
+### msg-1152
+
+Ends the command with status 1 (failure).
+
+Problem: The editor did not finish: {detail}
+
+Recovery: Check $EDITOR, then run the command again, nothing was saved.
+
+Raised for the module code `editor-failed`.
+
+### msg-1153
+
+Ends the command with status 5 (unavailable).
+
+Problem: The terminal interface needs Textual, which is not installed.
+
+Recovery: Install it with `pip install 'stratarc[ui]'`, then run `stratarc ui` again.
+
+Raised for the module code `ui-extra-missing`.
+
+### msg-1154
+
+Ends the command with status 4 (conflict).
+
+Problem: The change conflicts with what already exists: {detail}
+
+Recovery: Resolve the conflict, or choose another name or path, then run the command again.
+
+Raised for the module code `conflict`.

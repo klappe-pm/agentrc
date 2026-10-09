@@ -22,8 +22,11 @@ def _source_origin(root_flag: bool, root: Path) -> str:
         return "--root"
     if os.environ.get(paths.SOURCE_VARIABLE, "").strip():
         return paths.SOURCE_VARIABLE
-    if (root / paths.CONFIG_NAME).is_file():
+    cwd = Path.cwd().resolve()
+    if any((candidate / paths.CONFIG_NAME).is_file() for candidate in (cwd, *cwd.parents)):
         return f"nearest {paths.CONFIG_NAME}"
+    if paths.active_source() is not None:
+        return "active source (sources.toml)"
     return "current directory"
 
 
@@ -157,6 +160,19 @@ def permissions_table() -> list[dict]:
         _row("api serve", [_HOME, _SOURCE], [_HOME + " (the socket file only; a --port binds 127.0.0.1 and writes nothing)"]),
         _row("adapter list|show|status", [_HOME, _TARGETS], [], runs=["each runtime's --version, for status"]),
         _row("adapter register|remove|deprecate", [_HOME], [_HOME]),
+        _row("source show|list", [_HOME, _SOURCE], []),
+        _row("source init", ["the packaged template", _HOME], ["the new source root directory", _HOME + " (sources.toml, with a backup)"]),
+        _row("source use|move", [_HOME, _SOURCE], [_HOME + " (sources.toml, with a backup)", "the moved source root directory, for move"]),
+        _row("project list|show", [_SOURCE], []),
+        _row("project add|edit|enable|disable", [_SOURCE], [_SOURCE + " (projects-root and control-plane.md)", _HOME + " (backups)"], runs=["$EDITOR, for edit"]),
+        _row("project remove", [_SOURCE], ["projects-root/<name> in " + _SOURCE, _HOME + " (backups)"]),
+        _row("runtime list|show", [_SOURCE, _HOME], []),
+        _row("runtime enable|disable|target", [_SOURCE], [_SOURCE + " (stratarc.toml)", _HOME + " (backups)"]),
+        _row("agent list|show|explain", [_SOURCE], []),
+        _row("agent edit", [_SOURCE], [_SOURCE + " (the agent file)", _HOME + " (backups)"], runs=["$EDITOR"]),
+        _row("account list|show", [_SOURCE], []),
+        _row("account add|edit|remove", [_SOURCE], [_SOURCE + " (accounts/)", _HOME + " (backups)"], runs=["$EDITOR, for edit"]),
+        _row("ui", [_SOURCE, _HOME, _TARGETS], ["only what the commands it starts write: the rows above, and sync and verify run"], runs=["$EDITOR, for edit", "the sync and verify it starts, in process"]),
     ]
 
 

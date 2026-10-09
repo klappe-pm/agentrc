@@ -15,6 +15,8 @@ PROJECTS_VARIABLE = "LLM_ROOT_PROJECTS_DIR"
 OWNER_VARIABLE = "STRATARC_GITHUB_OWNER"
 NAME_VARIABLE = "STRATARC_NAME"
 DEFAULT_NAME = "stratarc"
+# The newest home file schema this build reads; mirrors `stratarc.home_layout.SCHEMA_VERSION`, which cannot be imported here without a cycle.
+_SOURCES_SCHEMA = 1
 
 
 def _env(name: str) -> str:
@@ -36,7 +38,7 @@ def home() -> Path:
 def source_root(explicit: Path | None = None) -> Path:
     """The source root to read from.
 
-    Precedence: the explicit argument, then `STRATARC_SOURCE`, then the nearest directory at or above the current directory that holds `stratarc.toml`, then the current directory.
+    Precedence: the explicit argument, then `STRATARC_SOURCE`, then the nearest directory at or above the current directory that holds `stratarc.toml`, then the active entry of `<home>/.stratarc/sources.toml` (written by `stratarc source use`), then the current directory.
     """
     if explicit is not None:
         return Path(explicit).expanduser().resolve()
@@ -47,7 +49,31 @@ def source_root(explicit: Path | None = None) -> Path:
     for candidate in (cwd, *cwd.parents):
         if (candidate / CONFIG_NAME).is_file():
             return candidate
-    return cwd
+    return active_source() or cwd
+
+
+def active_source() -> Path | None:
+    """The directory the active entry of `<home>/.stratarc/sources.toml` names, or None.
+
+    Read on every call and tolerant: a missing, unreadable, malformed or newer-schema file, an active name that no entry carries, and a directory that no longer exists all give None, so resolution falls through to the current directory and never raises.
+    """
+    import tomllib
+
+    try:
+        path = home() / ".stratarc" / "sources.toml"
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+        version = document.get("schema_version")
+        if isinstance(version, int) and not isinstance(version, bool) and version > _SOURCES_SCHEMA:
+            return None
+        active = document.get("active")
+        entry = document.get("sources", {}).get(active) if isinstance(active, str) else None
+        target = entry.get("path") if isinstance(entry, dict) else None
+        if not isinstance(target, str) or not target:
+            return None
+        resolved = Path(target).expanduser().resolve()
+        return resolved if resolved.is_dir() else None
+    except (OSError, ValueError, AttributeError, RuntimeError):
+        return None
 
 
 def projects_root(explicit: Path | None = None, root: Path | None = None) -> Path:
