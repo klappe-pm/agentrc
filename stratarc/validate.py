@@ -93,6 +93,8 @@ def check_agent_tools(root: Path) -> list[dict]:
     if not agents_dir.is_dir():
         return findings
     for path in sorted(agents_dir.glob("*.md")):
+        if path.name == "README.md":
+            continue
         rel = path.relative_to(root).as_posix()
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         if not lines or lines[0].strip() != "---":

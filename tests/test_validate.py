@@ -92,6 +92,10 @@ class TestAgentTools:
     def test_no_agents_directory_is_no_finding(self, tmp_path: Path) -> None:
         assert vs.check_agent_tools(tmp_path) == []
 
+    def test_the_directory_readme_is_not_an_agent_definition(self, tmp_path: Path) -> None:
+        write(tmp_path, "agents/README.md", "# agents\n\nWhat this directory holds.\n")
+        assert vs.check_agent_tools(tmp_path) == []
+
 
 class TestAgentToolUse:
     BODY = "\n# verifier\n\n1. Read the project files.\n2. Use WebFetch to reference the official docs.\n3. Keep a TodoWrite-style checklist.\n\n```text\nUse WebSearch here: inside a fence this is an example, not an instruction.\n```\n"
