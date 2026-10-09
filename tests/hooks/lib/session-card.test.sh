@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/hooks/lib" && pwd)"
+LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/hooks/lib" && pwd)"
 ENGINE="$LIB/session-card.py"
 
 PASS=0

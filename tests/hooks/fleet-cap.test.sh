@@ -5,7 +5,7 @@
 # directory and components.json are never read.
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)"
 LIB="$DIR/lib/fleet-cap.py"
 GUARD="$DIR/subagent-cap-guard.sh"
 PASS=0
@@ -225,20 +225,20 @@ guard_out="$(dispatch fable | bash "$GUARD")"
 guard_out="$(printf 'not json' | bash "$GUARD" 2>/dev/null)" || true
 case "$guard_out" in *deny*) bad "guard: a malformed payload still fails open" "$guard_out" ;; *) ok ;; esac
 
-# Case 9: the source root is AGENTRC_SOURCE, else LLM_ROOT, and nothing else:
+# Case 9: the source root is STRATARC_SOURCE, else LLM_ROOT, and nothing else:
 # a copy that sits beside a components.json finds no cap by location, and with
 # neither variable there is no cap.
-configured() { env -u LLM_ROOT -u AGENTRC_SOURCE "$@" python3 "$LIB" count | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["model"], d["concurrent"])'; }
+configured() { env -u LLM_ROOT -u STRATARC_SOURCE "$@" python3 "$LIB" count | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["model"], d["concurrent"])'; }
 tree="$scratch/tree"; mkdir -p "$tree/hooks/lib"
 cp "$LIB" "$tree/hooks/lib/fleet-cap.py"
 printf '%s\n' '{"budgets": {"fleet": {"model": "claude-tree-1", "concurrent": 7}}}' >"$tree/components.json"
-[ "$(env -u LLM_ROOT -u AGENTRC_SOURCE python3 "$tree/hooks/lib/fleet-cap.py" count | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["model"], d["concurrent"])')" = "None None" ] && ok || bad "derived: a copy under <tree>/hooks/lib does not read <tree>/components.json by location"
+[ "$(env -u LLM_ROOT -u STRATARC_SOURCE python3 "$tree/hooks/lib/fleet-cap.py" count | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["model"], d["concurrent"])')" = "None None" ] && ok || bad "derived: a copy under <tree>/hooks/lib does not read <tree>/components.json by location"
 [ "$(configured)" = "None None" ] && ok || bad "derived: with neither variable there is no cap"
-[ "$(configured AGENTRC_SOURCE="$tree")" = "claude-tree-1 7" ] && ok || bad "derived: AGENTRC_SOURCE names the source root"
-[ "$(configured LLM_ROOT="$tree")" = "claude-tree-1 7" ] && ok || bad "derived: LLM_ROOT names the source root when AGENTRC_SOURCE is unset"
+[ "$(configured STRATARC_SOURCE="$tree")" = "claude-tree-1 7" ] && ok || bad "derived: STRATARC_SOURCE names the source root"
+[ "$(configured LLM_ROOT="$tree")" = "claude-tree-1 7" ] && ok || bad "derived: LLM_ROOT names the source root when STRATARC_SOURCE is unset"
 decoy="$scratch/decoy"; mkdir -p "$decoy"
 printf '%s\n' '{"budgets": {"fleet": {"model": "claude-decoy-9", "concurrent": 3}}}' >"$decoy/components.json"
-[ "$(configured AGENTRC_SOURCE="$tree" LLM_ROOT="$decoy")" = "claude-tree-1 7" ] && ok || bad "derived: AGENTRC_SOURCE wins over LLM_ROOT"
+[ "$(configured STRATARC_SOURCE="$tree" LLM_ROOT="$decoy")" = "claude-tree-1 7" ] && ok || bad "derived: STRATARC_SOURCE wins over LLM_ROOT"
 
 if [ "$FAIL" -gt 0 ]; then
   printf 'fleet-cap.test: FAIL (%d passed, %d failed)\n' "$PASS" "$FAIL" >&2

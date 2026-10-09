@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)"
 HOOK="$DIR/session-start.sh"
 LLM_ROOT_UNDER_TEST="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -169,7 +169,7 @@ run_hook() {
   check_fail_open "exit status for cwd $1"
 }
 
-# --- fixture-free: the source root comes from AGENTRC_SOURCE, then LLM_ROOT, and nowhere else ---
+# --- fixture-free: the source root comes from STRATARC_SOURCE, then LLM_ROOT, and nowhere else ---
 free_cwd="$scratch/projects/free"
 mkdir -p "$free_cwd" "$scratch/stub-src/scripts" "$scratch/stub-other/scripts" "$scratch/stub-empty"
 printf 'print("STUB-PICKER-SOURCE")\n' >"$scratch/stub-src/scripts/session-resume.py"
@@ -177,24 +177,24 @@ printf 'print("STUB-PICKER-OTHER")\n' >"$scratch/stub-other/scripts/session-resu
 free_run() {
   printf '%s' "$(payload_with "$free_cwd" startup "")" >"$scratch/payload"
   rc=0
-  env -u LLM_ROOT -u AGENTRC_SOURCE HOME="$test_home" COLUMNS=100 NO_COLOR=1 "$@" \
+  env -u LLM_ROOT -u STRATARC_SOURCE HOME="$test_home" COLUMNS=100 NO_COLOR=1 "$@" \
     bash "$HOOK" <"$scratch/payload" 2>"$scratch/stderr" || rc=$?
   printf '%s' "$rc" >"$scratch/rc"
 }
 out="$(free_run)"
 check_fail_open 'no source root set'
 check_empty 'no source root set stays silent, with no file-location fallback' "$out"
-out="$(free_run AGENTRC_SOURCE="$scratch/stub-empty")"
+out="$(free_run STRATARC_SOURCE="$scratch/stub-empty")"
 check_fail_open 'a source root without the picker'
 check_empty 'a source root without the picker stays silent' "$out"
-out="$(free_run AGENTRC_SOURCE="$scratch/stub-src")"
-check_fail_open 'AGENTRC_SOURCE set'
-check_contains 'AGENTRC_SOURCE names the source root' "$out" "STUB-PICKER-SOURCE"
+out="$(free_run STRATARC_SOURCE="$scratch/stub-src")"
+check_fail_open 'STRATARC_SOURCE set'
+check_contains 'STRATARC_SOURCE names the source root' "$out" "STUB-PICKER-SOURCE"
 out="$(free_run LLM_ROOT="$scratch/stub-other")"
-check_contains 'LLM_ROOT names the source root when AGENTRC_SOURCE is unset' "$out" "STUB-PICKER-OTHER"
-out="$(free_run AGENTRC_SOURCE="$scratch/stub-src" LLM_ROOT="$scratch/stub-other")"
-check_contains 'AGENTRC_SOURCE wins over LLM_ROOT' "$out" "STUB-PICKER-SOURCE"
-check_not_contains 'AGENTRC_SOURCE wins over LLM_ROOT, so the other picker does not run' "$out" "STUB-PICKER-OTHER"
+check_contains 'LLM_ROOT names the source root when STRATARC_SOURCE is unset' "$out" "STUB-PICKER-OTHER"
+out="$(free_run STRATARC_SOURCE="$scratch/stub-src" LLM_ROOT="$scratch/stub-other")"
+check_contains 'STRATARC_SOURCE wins over LLM_ROOT' "$out" "STUB-PICKER-SOURCE"
+check_not_contains 'STRATARC_SOURCE wins over LLM_ROOT, so the other picker does not run' "$out" "STUB-PICKER-OTHER"
 
 # The scenarios below run the operator's own session scripts (session-resume,
 # session-launch, program-status). A checkout without them skips those.
@@ -425,14 +425,14 @@ check_not_contains 'a plain home session leaves out a DONE work item' "$out" "WI
 check_contains 'a plain home session still asks for a project' "$out" "Pick a project"
 unset run_root
 
-# --- scenario 14b: without AGENTRC_SOURCE or LLM_ROOT the hook has no root ---
+# --- scenario 14b: without STRATARC_SOURCE or LLM_ROOT the hook has no root ---
 # A copy of the hook under <tree>/hooks/ with <tree>/scripts/ beside it does
 # not derive that tree as its root: the location of the hook decides nothing.
 mkdir -p "$fixture_root/hooks"
 cp "$HOOK" "$fixture_root/hooks/session-start.sh"
 printf '%s' "$(payload_with "$test_home" startup "")" >"$scratch/payload"
 rc=0
-out="$(env -u LLM_ROOT -u AGENTRC_SOURCE HOME="$test_home" SESSION_CARD_ROOT="$transcripts" COLUMNS=100 NO_COLOR=1 bash "$fixture_root/hooks/session-start.sh" <"$scratch/payload" 2>"$scratch/stderr")" || rc=$?
+out="$(env -u LLM_ROOT -u STRATARC_SOURCE HOME="$test_home" SESSION_CARD_ROOT="$transcripts" COLUMNS=100 NO_COLOR=1 bash "$fixture_root/hooks/session-start.sh" <"$scratch/payload" 2>"$scratch/stderr")" || rc=$?
 printf '%s' "$rc" >"$scratch/rc"
 check_fail_open 'a hook run from its own tree without a source root'
 check_empty 'a hook run from its own tree without a source root stays silent' "$out"

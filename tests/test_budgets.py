@@ -1,4 +1,4 @@
-"""Tests for agentrc.budgets: the budget schema, its four levels, and the check.
+"""Tests for stratarc.budgets: the budget schema, its four levels, and the check.
 
 The units and the layering these tests pin: user defaults, then the project, then the work item's loadout, then the session, each able only to lower a limit set above it.
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import budgets
+from stratarc import budgets
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "budgets"
 

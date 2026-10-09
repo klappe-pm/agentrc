@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Behavioral tests for agentrc/data/git-hooks/check-staged-prose.sh
+# Behavioral tests for stratarc/data/git-hooks/check-staged-prose.sh
 #
 # The pre-commit backstop must catch a staged em-dash and a staged hard-wrap
 # in Markdown, pass clean Markdown, ignore non-Markdown, and honor the
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/git-hooks" && pwd)/check-staged-prose.sh"
+CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/git-hooks" && pwd)/check-staged-prose.sh"
 
 EMDASH=$'\xe2\x80\x94'   # U+2014
 ENDASH=$'\xe2\x80\x93'   # U+2013

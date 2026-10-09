@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)"
 SCRIPT="$HERE/agent-graph-session-start.sh"
 
 PASS=0

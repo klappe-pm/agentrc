@@ -15,15 +15,15 @@ from pathlib import Path
 import pytest
 
 
-from agentrc.adapters import codex
-from agentrc.adapters._common import home, owned_dir_entries
-from agentrc.adapters._text import set_top_level
+from stratarc.adapters import codex
+from stratarc.adapters._common import home, owned_dir_entries
+from stratarc.adapters._text import set_top_level
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 
@@ -483,7 +483,7 @@ class TestCanonicalPermissions(unittest.TestCase):
     """Canonical permissions render native Codex settings and rules."""
 
     def test_explicit_approval_policy_reaches_global_and_project_configs(self):
-        _rewrite_codex_head = pytest.importorskip("agentrc.project_permissions")._rewrite_codex_head
+        _rewrite_codex_head = pytest.importorskip("stratarc.project_permissions")._rewrite_codex_head
 
         with tempfile.TemporaryDirectory() as root:
             source = Path(root) / "source"
@@ -502,9 +502,9 @@ class TestCanonicalPermissions(unittest.TestCase):
             config = tomllib.loads((target / "config.toml").read_text())
             self.assertEqual(config["approval_policy"], "on-request")
             self.assertEqual(config["approvals_reviewer"], "auto_review")
-            self.assertEqual(config["default_permissions"], "agentrc")
+            self.assertEqual(config["default_permissions"], "stratarc")
             self.assertEqual(
-                config["permissions"]["agentrc"]["filesystem"]["~/Library/Keychains"],
+                config["permissions"]["stratarc"]["filesystem"]["~/Library/Keychains"],
                 "deny",
             )
             project = _rewrite_codex_head('approval_policy = "never"\n', policy)
@@ -512,7 +512,7 @@ class TestCanonicalPermissions(unittest.TestCase):
             self.assertEqual(codex.sync(source, target), [])
 
     def test_explicit_approval_policy_is_validated(self):
-        from agentrc.permissions import load
+        from stratarc.permissions import load
 
         with tempfile.TemporaryDirectory() as root:
             source = Path(root)
@@ -525,7 +525,7 @@ class TestCanonicalPermissions(unittest.TestCase):
                         load(source)
 
     def test_explicit_never_and_legacy_approval_defaults_are_preserved(self):
-        from agentrc.permissions import codex_approval_policy
+        from stratarc.permissions import codex_approval_policy
 
         self.assertEqual(
             codex_approval_policy({"codexApprovalPolicy": "never"}), "never"
@@ -562,19 +562,19 @@ class TestCanonicalPermissions(unittest.TestCase):
                 codex.sync(source, target)
                 config = tomllib.loads((target / "config.toml").read_text())
                 self.assertEqual(
-                    config["permissions"]["agentrc"]["network"], policy["codexNetwork"]
+                    config["permissions"]["stratarc"]["network"], policy["codexNetwork"]
                 )
                 proxy = config["features"]["network_proxy"]
                 self.assertTrue(proxy["enabled"] if isinstance(proxy, dict) else proxy)
                 if isinstance(proxy, dict):
                     self.assertEqual(proxy["domains"]["existing.example"], "deny")
                 self.assertEqual(
-                    config["permissions"]["agentrc"]["filesystem"]["~/.ssh"], "deny"
+                    config["permissions"]["stratarc"]["filesystem"]["~/.ssh"], "deny"
                 )
                 self.assertEqual(codex.sync(source, target), [])
 
     def test_network_policy_is_optional_and_validated(self):
-        from agentrc.permissions import load
+        from stratarc.permissions import load
 
         with tempfile.TemporaryDirectory() as root:
             source = Path(root)
@@ -594,7 +594,7 @@ class TestCanonicalPermissions(unittest.TestCase):
             self.assertNotIn(
                 "network",
                 tomllib.loads(codex._codex_permissions_block(policy))["permissions"][
-                    "agentrc"
+                    "stratarc"
                 ],
             )
 
@@ -702,7 +702,7 @@ class TestCanonicalPermissions(unittest.TestCase):
             self.assertEqual(codex.sync(source, target), [])
 
     def test_shell_environment_passthrough_is_optional_and_validated(self):
-        from agentrc.permissions import load
+        from stratarc.permissions import load
 
         with tempfile.TemporaryDirectory() as root:
             source = Path(root) / "source"
@@ -768,10 +768,10 @@ class TestCanonicalPermissions(unittest.TestCase):
             self.assertEqual(config["approval_policy"], "never")
             self.assertEqual(config["web_search"], "live")
             self.assertNotIn("web_search_request", config.get("features", {}))
-            self.assertEqual(config["default_permissions"], "agentrc")
+            self.assertEqual(config["default_permissions"], "stratarc")
             self.assertNotIn("sandbox_mode", config)
             self.assertIn("permissions", config)
-            filesystem = config["permissions"]["agentrc"]["filesystem"]
+            filesystem = config["permissions"]["stratarc"]["filesystem"]
             self.assertEqual(filesystem[":workspace_roots"]["**/.env"], "deny")
             self.assertEqual(filesystem["~/.ssh"], "deny")
             self.assertNotIn(
@@ -780,7 +780,7 @@ class TestCanonicalPermissions(unittest.TestCase):
             self.assertEqual(
                 config["projects"][str(tree / "repo")]["trust_level"], "trusted"
             )
-            rules = (target / "rules" / "agentrc.rules").read_text()
+            rules = (target / "rules" / "stratarc.rules").read_text()
             self.assertIn('pattern=["git", "push", "--force"]', rules)
             self.assertIn('decision="forbidden"', rules)
 
@@ -853,7 +853,7 @@ class TestCanonicalPermissions(unittest.TestCase):
             self.assertNotIn(str(tree / "node_modules"), text)
             self.assertNotIn(str(tree / "plain"), text)
             self.assertEqual(text.count("[projects."), 3)
-            self.assertTrue(text.rstrip().endswith("# END agentrc permissions"))
+            self.assertTrue(text.rstrip().endswith("# END stratarc permissions"))
 
             second = codex.sync(source, target)
             self.assertEqual(second, [])
@@ -863,7 +863,7 @@ class TestCanonicalPermissions(unittest.TestCase):
         """A managed block the runtime rewrote without its markers is stripped, not duplicated.
 
         Codex sorts tables and drops comments when it re-serializes config.toml.
-        Appending beside the demarkered copy produces two [permissions.agentrc]
+        Appending beside the demarkered copy produces two [permissions.stratarc]
         tables, which is invalid TOML and blocks every Codex turn.
         """
         with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as tgt:
@@ -884,8 +884,8 @@ class TestCanonicalPermissions(unittest.TestCase):
             # Markers gone, tables sorted into the body: what Codex leaves behind.
             (target / "config.toml").write_text(
                 'model = "x"\n\n'
-                '[permissions.agentrc]\nextends = ":workspace"\n\n'
-                '[permissions.agentrc.filesystem]\n"~/.ssh" = "deny"\n\n'
+                '[permissions.stratarc]\nextends = ":workspace"\n\n'
+                '[permissions.stratarc.filesystem]\n"~/.ssh" = "deny"\n\n'
                 '[tui]\nnotification_condition = "always"\n'
             )
 
@@ -893,9 +893,9 @@ class TestCanonicalPermissions(unittest.TestCase):
 
             text = (target / "config.toml").read_text()
             config = tomllib.loads(text)
-            self.assertEqual(text.count("[permissions.agentrc]"), 1)
+            self.assertEqual(text.count("[permissions.stratarc]"), 1)
             self.assertEqual(
-                config["permissions"]["agentrc"]["filesystem"]["~/.ssh"], "deny"
+                config["permissions"]["stratarc"]["filesystem"]["~/.ssh"], "deny"
             )
             self.assertEqual(config["tui"]["notification_condition"], "always")
             self.assertEqual(config["model"], "x")

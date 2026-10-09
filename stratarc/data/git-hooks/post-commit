@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# git post-commit hook for a source root. A commit in the canonical checkout
+# runs `stratarc sync`, which renders the source into every configured runtime.
+# Install it by pointing core.hooksPath at this directory or by copying it into
+# .git/hooks/post-commit.
+#
+# A commit in a linked worktree does not deploy. Each worktree holds its own
+# branch's copy of permissions.json, rules/ and hooks/, and this hook deploys
+# the tree it runs in, so a commit in a worktree on an older branch would
+# republish that branch's configuration over every runtime and every project.
+# Deploying from a worktree stays available on purpose, by running
+# `stratarc sync` there.
+#
+# Which branch may deploy is decided by `stratarc sync` itself (its branch guard
+# and --allow-branch), so this hook does not repeat that check.
+#
+# STRATARC_BIN overrides the command that is run, for a checkout that is not on
+# PATH and for the hook's test.
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+STRATARC_BIN="${STRATARC_BIN:-stratarc}"
+
+deploy_shared_config() {
+  # In the canonical checkout the git directory is the common directory. In a
+  # linked worktree the git directory is <common>/worktrees/<name>, so the two
+  # differ, which is the test for "this commit is not the source of record".
+  local git_dir common_dir
+  git_dir="$(git rev-parse --absolute-git-dir 2>/dev/null)" || return 0
+  common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 0
+  if [ "$git_dir" != "$common_dir" ]; then
+    printf 'stratarc: linked worktree, shared config not deployed. Run stratarc sync from the canonical checkout at %s to publish it.\n' "$(dirname "$common_dir")"
+    return 0
+  fi
+
+  if ! command -v "$STRATARC_BIN" >/dev/null 2>&1; then
+    printf 'stratarc: %s is not on PATH; shared config not deployed.\n' "$STRATARC_BIN" >&2
+    return 0
+  fi
+
+  if ! STRATARC_SOURCE="$ROOT" "$STRATARC_BIN" sync; then
+    printf 'stratarc: post-commit synchronization failed; the commit exists but runtime outputs may be stale.\n' >&2
+    return 1
+  fi
+}
+
+deploy_status=0
+deploy_shared_config || deploy_status=$?
+exit "$deploy_status"

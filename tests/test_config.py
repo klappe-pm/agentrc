@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import pytest
 
-from agentrc.config import Config, ConfigError, load_config
+from stratarc.config import Config, ConfigError, load_config
 from conftest import REPO_ROOT
 
-TEMPLATE = REPO_ROOT / "agentrc" / "data" / "templates" / "source-root"
+TEMPLATE = REPO_ROOT / "stratarc" / "data" / "templates" / "source-root"
 EXAMPLE = REPO_ROOT / "examples" / "notes-cli" / "source"
 RUNTIMES = {"claude", "codex", "gemini", "cursor", "opencode"}
 
 
 @pytest.fixture(autouse=True)
 def fake_home(monkeypatch, tmp_path):
-    monkeypatch.delenv("AGENTRC_HOME", raising=False)
+    monkeypatch.delenv("STRATARC_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
 
 
 def write(root, text):
-    (root / "agentrc.toml").write_text(text, encoding="utf-8")
+    (root / "stratarc.toml").write_text(text, encoding="utf-8")
 
 
 def test_missing_file_yields_defaults(tmp_path):
@@ -43,8 +43,8 @@ def test_example_shape():
     assert config.owner == "example-owner"
 
 
-def test_tilde_follows_agentrc_home(monkeypatch, tmp_path):
-    monkeypatch.setenv("AGENTRC_HOME", str(tmp_path / "redirected"))
+def test_tilde_follows_stratarc_home(monkeypatch, tmp_path):
+    monkeypatch.setenv("STRATARC_HOME", str(tmp_path / "redirected"))
     write(tmp_path, 'projects_root = "~/work"\n[runtimes.claude]\nenabled = true\ntarget = "~/.claude"\n')
     config = load_config(tmp_path)
     assert config.projects_root == tmp_path / "redirected" / "work"
@@ -80,4 +80,4 @@ def test_malformed_file_names_the_path(tmp_path, text):
     write(tmp_path, text)
     with pytest.raises(ConfigError) as caught:
         load_config(tmp_path)
-    assert str(tmp_path / "agentrc.toml") in str(caught.value)
+    assert str(tmp_path / "stratarc.toml") in str(caught.value)

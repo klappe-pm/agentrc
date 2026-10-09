@@ -7,7 +7,7 @@
 # payload shapes, and fails open on every internal error.
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/hook-test.sh"
 
 HOOK="$DIR/tool-budget-guard.sh"

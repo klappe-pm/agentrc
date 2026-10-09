@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from agentrc.gen_rules_digest import main
-from agentrc.rules_digest import DIGEST_BEGIN, DIGEST_END
+from stratarc.gen_rules_digest import main
+from stratarc.rules_digest import DIGEST_BEGIN, DIGEST_END
 
 FIXTURE_RULES = Path(__file__).resolve().parent / "fixtures" / "rules"
-TOKEN = "${AGENTRC_SOURCE}"
+TOKEN = "${STRATARC_SOURCE}"
 
 CONTROL_PLANE = """\
 # control-plane
@@ -70,10 +70,10 @@ class TestPrint:
 
     def test_running_as_a_module_prints_the_digest(self, tree, repo_root):
         env = {k: v for k, v in os.environ.items() if k != "RULES_DIGEST_SOURCE"}
-        env["AGENTRC_SOURCE"] = str(tree)
+        env["STRATARC_SOURCE"] = str(tree)
         env["PYTHONPATH"] = str(repo_root)
         result = subprocess.run(
-            [sys.executable, "-m", "agentrc.gen_rules_digest", "--print"],
+            [sys.executable, "-m", "stratarc.gen_rules_digest", "--print"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -143,13 +143,13 @@ class TestSourceRoot:
         (root / "rules" / "tiers.json").write_text('{"global": ["example-rule.md"]}', encoding="utf-8")
         return root
 
-    def test_the_default_render_keeps_the_token_and_names_no_machine(self, public, agentrc_home, capsys):
+    def test_the_default_render_keeps_the_token_and_names_no_machine(self, public, stratarc_home, capsys):
         assert main(["--print", "--rules-root", str(public / "rules")]) == 0
         out = capsys.readouterr().out
         assert f"Full rule: `{TOKEN}/rules/example-rule.md`" in out
         assert f"python3 {TOKEN}/scripts/x.py" in out
         assert "$HOME" not in out
-        assert str(agentrc_home) not in out
+        assert str(stratarc_home) not in out
 
     def test_source_root_renders_pointers_and_tokens_to_that_checkout(self, public, capsys):
         assert main(["--print", "--rules-root", str(public / "rules"), "--source-root", str(public)]) == 0

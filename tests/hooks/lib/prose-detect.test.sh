@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-DETECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/hooks/lib" && pwd)/prose-detect.py"
+DETECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/hooks/lib" && pwd)/prose-detect.py"
 
 EMDASH=$'\xe2\x80\x94'   # U+2014
 HBAR=$'\xe2\x80\x95'     # U+2015

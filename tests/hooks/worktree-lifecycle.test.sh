@@ -6,7 +6,7 @@ for required in git mktemp python3; do
   command -v "$required" >/dev/null 2>&1 || { echo "missing required tool: $required" >&2; exit 1; }
 done
 
-ROOT="$(cd "$(dirname "$0")/../../agentrc/data/hooks" && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../stratarc/data/hooks" && pwd)"
 CREATE="$ROOT/worktree-create.sh"
 REMOVE="$ROOT/worktree-remove.sh"
 VALIDATE="$ROOT/worktree-validate.sh"

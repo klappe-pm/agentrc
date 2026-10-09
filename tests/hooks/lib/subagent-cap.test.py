@@ -18,7 +18,7 @@ import time
 import unittest
 from pathlib import Path
 
-MODULE = Path(__file__).resolve().parents[3] / "agentrc" / "data" / "hooks" / "lib" / "subagent-cap.py"
+MODULE = Path(__file__).resolve().parents[3] / "stratarc" / "data" / "hooks" / "lib" / "subagent-cap.py"
 PARENT = "parent-session"
 
 

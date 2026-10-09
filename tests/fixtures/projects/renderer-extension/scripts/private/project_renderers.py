@@ -5,7 +5,7 @@ A project opts in by carrying projects-root/<name>/notice.txt. The text is deliv
 
 from __future__ import annotations
 
-from agentrc import projects
+from stratarc import projects
 
 OPT_IN = "notice.txt"
 TARGET = "NOTICE.txt"

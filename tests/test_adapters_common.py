@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 
-from agentrc.adapters._common import (
+from stratarc.adapters._common import (
     OwnedDir,
     classify_registration,
     extract_script_paths,
@@ -28,20 +28,20 @@ from agentrc.adapters._common import (
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 
 class TestHome(unittest.TestCase):
-    """AGENTRC_HOME redirects every runtime target and every $HOME expansion;
+    """STRATARC_HOME redirects every runtime target and every $HOME expansion;
     unset or empty, the home is the process's own, as before the accessor."""
 
-    def test_agentrc_home_redirects_every_runtime_target(self):
+    def test_stratarc_home_redirects_every_runtime_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             override = Path(tmp)
-            with patch.dict(os.environ, {"AGENTRC_HOME": tmp}):
+            with patch.dict(os.environ, {"STRATARC_HOME": tmp}):
                 self.assertEqual(home(), override)
                 for name, runtime in runtime_registry().items():
                     with self.subTest(runtime=name):
@@ -54,7 +54,7 @@ class TestHome(unittest.TestCase):
     def test_unset_falls_back_to_the_process_home(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(os.environ, {"HOME": tmp}):
-                os.environ.pop("AGENTRC_HOME", None)
+                os.environ.pop("STRATARC_HOME", None)
                 self.assertEqual(home(), Path(tmp))
                 for name, runtime in runtime_registry().items():
                     with self.subTest(runtime=name):
@@ -62,7 +62,7 @@ class TestHome(unittest.TestCase):
 
     def test_empty_value_falls_back_to_the_process_home(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(os.environ, {"HOME": tmp, "AGENTRC_HOME": ""}):
+            with patch.dict(os.environ, {"HOME": tmp, "STRATARC_HOME": ""}):
                 self.assertEqual(home(), Path(tmp))
 
 
@@ -447,7 +447,7 @@ class TestOwnedDirDataclass(unittest.TestCase):
         self.assertEqual(od.exclude, frozenset())
 
 
-ADAPTERS_DIR = Path(__file__).resolve().parents[1] / "agentrc" / "adapters"
+ADAPTERS_DIR = Path(__file__).resolve().parents[1] / "stratarc" / "adapters"
 SIXTH_ADAPTER = (Path(__file__).resolve().parent / "fixtures" / "adapters" / "registry" / "sixth.py").read_text()
 
 
@@ -465,7 +465,7 @@ class TestRuntimeRegistry(unittest.TestCase):
     """One runtime registry, declared by each adapter and listed by one function in _common.py, so a new runtime is one adapter file, not several lists."""
 
     def registry(self, adapters_dir=None):
-        import agentrc.adapters._common as common
+        import stratarc.adapters._common as common
 
         return common.runtime_registry(adapters_dir)
 
@@ -480,7 +480,7 @@ class TestRuntimeRegistry(unittest.TestCase):
         for name, runtime in registry.items():
             with self.subTest(runtime=name):
                 self.assertEqual(runtime.name, name)
-                self.assertEqual(runtime.module, f"agentrc.adapters.{name}")
+                self.assertEqual(runtime.module, f"stratarc.adapters.{name}")
 
     def test_targets_and_hook_registries_match_what_sync_managed_before(self):
         registry = self.registry()
@@ -515,7 +515,7 @@ class TestRuntimeRegistry(unittest.TestCase):
         self.assertIn("SessionStart", registry["sixth"].hook_events)
 
     def test_an_adapter_without_the_constant_is_an_error_naming_the_file(self):
-        import agentrc.adapters._common as common
+        import stratarc.adapters._common as common
 
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
@@ -524,7 +524,7 @@ class TestRuntimeRegistry(unittest.TestCase):
                 common.runtime_registry(directory)
 
     def test_a_name_that_differs_from_the_file_is_an_error(self):
-        import agentrc.adapters._common as common
+        import stratarc.adapters._common as common
 
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
@@ -533,7 +533,7 @@ class TestRuntimeRegistry(unittest.TestCase):
                 common.runtime_registry(directory)
 
     def test_managed_runtime_roots_come_from_the_registry(self):
-        import agentrc.adapters._common as common
+        import stratarc.adapters._common as common
 
         for runtime in self.registry().values():
             with self.subTest(runtime=runtime.name):

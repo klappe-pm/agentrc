@@ -21,7 +21,7 @@ import time
 import unittest
 from pathlib import Path
 
-LIB = Path(__file__).resolve().parents[3] / "agentrc" / "data" / "hooks" / "lib"
+LIB = Path(__file__).resolve().parents[3] / "stratarc" / "data" / "hooks" / "lib"
 HELPER = LIB / "program-summary.py"
 REPO = Path(__file__).resolve().parents[3]
 needs_status_script = unittest.skipUnless((REPO / "scripts" / "program-status.py").is_file(), "scripts/program-status.py is not in this checkout")
@@ -166,7 +166,7 @@ class HelperTest(unittest.TestCase):
         self.events.write_text("".join(json.dumps(item) + "\n" for item in events), encoding="utf-8")
 
     def env(self, **extra: str) -> dict:
-        env = {key: value for key, value in os.environ.items() if not key.startswith(("PROGRAM_", "LLM_ROOT", "AGENTRC_SOURCE"))}
+        env = {key: value for key, value in os.environ.items() if not key.startswith(("PROGRAM_", "LLM_ROOT", "STRATARC_SOURCE"))}
         env.update(
             {
                 "HOME": str(self.dir / "home"),
@@ -324,7 +324,7 @@ class HelperTest(unittest.TestCase):
     def test_a_missing_root_prints_nothing(self):
         self.assert_silent(self.run_helper("line", LLM_ROOT=str(self.dir / "nowhere")))
 
-    def test_the_source_root_is_agentrc_source_then_llm_root_and_never_the_file_location(self):
+    def test_the_source_root_is_stratarc_source_then_llm_root_and_never_the_file_location(self):
         snapshot = {"events": {"items": [{"item": "WI-1", "event": "needs_decision"}]}}
         body = f"import json\nprint(json.dumps({snapshot!r}))\n"
         tree = self.fake_root(body)
@@ -346,11 +346,11 @@ class HelperTest(unittest.TestCase):
         copy.parent.mkdir(parents=True)
         copy.write_bytes(HELPER.read_bytes())
         self.assert_silent(run(copy))
-        result = run(copy, AGENTRC_SOURCE=str(tree))
+        result = run(copy, STRATARC_SOURCE=str(tree))
         self.assertEqual((result.returncode, result.stdout), (0, one), result.stderr)
         result = run(copy, LLM_ROOT=str(tree))
         self.assertEqual((result.returncode, result.stdout), (0, one), result.stderr)
-        result = run(copy, AGENTRC_SOURCE=str(other), LLM_ROOT=str(tree))
+        result = run(copy, STRATARC_SOURCE=str(other), LLM_ROOT=str(tree))
         self.assertEqual((result.returncode, result.stdout), (0, two), result.stderr)
 
     def test_an_unknown_command_prints_nothing(self):

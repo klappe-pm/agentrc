@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/hooks/lib" && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/hooks/lib" && pwd)"
 # shellcheck source=secret-scan.sh
 source "$DIR/secret-scan.sh"
 

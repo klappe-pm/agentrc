@@ -1,18 +1,18 @@
 # cli-design
 
-This page is the design for the command line and terminal interface of agentrc. It covers the command tree, the `~/.agentrc` home, how settings are inherited and explained, provider and adapter registration, the optional change log, verification, error messages, the local read API, and the first-run and documentation experience. It is a design, not shipped behavior; the [architecture](architecture.md) page describes what exists today.
+This page is the design for the command line and terminal interface of stratarc. It covers the command tree, the `~/.stratarc` home, how settings are inherited and explained, provider and adapter registration, the optional change log, verification, error messages, the local read API, and the first-run and documentation experience. It is a design, not shipped behavior; the [architecture](architecture.md) page describes what exists today.
 
 ## principles
 
 - One tool for the whole tree. Everything the engine knows (base, project, agent, provider, adapter) is reachable by the same `resource verb` grammar, in scripts and in the terminal interface.
 - Nothing hidden. Every value shown can be traced to the file and line that set it, and every write names the file it changed.
-- Local first. All state lives in the source root and in `~/.agentrc`. Nothing is sent anywhere.
+- Local first. All state lives in the source root and in `~/.stratarc`. Nothing is sent anywhere.
 - Safe by default. Writes preview first, back up before replacing, and refuse rather than guess.
 - Same answers everywhere. The command line, the terminal interface, the local read API and CI all call one library layer, so they cannot disagree.
 
 ## command-grammar
 
-Commands are `agentrc <resource> <verb> [args]`. Help exists at the root, the resource and the verb. Output is human readable on a terminal and a stable JSON envelope with `--json`. In noninteractive mode a command never prompts; it fails with the message that says what flag to pass.
+Commands are `stratarc <resource> <verb> [args]`. Help exists at the root, the resource and the verb. Output is human readable on a terminal and a stable JSON envelope with `--json`. In noninteractive mode a command never prompts; it fails with the message that says what flag to pass.
 
 | resource | verbs | what it manages |
 |---|---|---|
@@ -36,10 +36,10 @@ Commands are `agentrc <resource> <verb> [args]`. Help exists at the root, the re
 
 ## the-home-directory
 
-The tool keeps its own state in `~/.agentrc`, or `$XDG_CONFIG_HOME/agentrc` where that variable is set, or the path in `AGENTRC_HOME`. The home holds the machine, not the project. The source root stays a normal directory you can commit.
+The tool keeps its own state in `~/.stratarc`, or `$XDG_CONFIG_HOME/stratarc` where that variable is set, or the path in `STRATARC_HOME`. The home holds the machine, not the project. The source root stays a normal directory you can commit.
 
 ```text
-~/.agentrc/
+~/.stratarc/
   config.toml          machine settings: active source root, log switch, ui preferences
   sources.toml         known source roots and which one is active
   providers/           one file per registered provider
@@ -48,14 +48,14 @@ The tool keeps its own state in `~/.agentrc`, or `$XDG_CONFIG_HOME/agentrc` wher
   backups/             timestamped copies of every file replaced by a write
   logs/
     changes.db         optional SQLite change log
-    agentrc.log        human readable log
-    agentrc.jsonl      machine log, same events as the database
+    stratarc.log        human readable log
+    stratarc.jsonl      machine log, same events as the database
   cache/               disposable
 ```
 
 Cleaning and maintenance rules:
 
-- `backups/` keeps the last 20 versions of each file and anything newer than 30 days, whichever is more. `agentrc doctor --clean` shows what would be removed and removes it only with `--yes`.
+- `backups/` keeps the last 20 versions of each file and anything newer than 30 days, whichever is more. `stratarc doctor --clean` shows what would be removed and removes it only with `--yes`.
 - `cache/` can be deleted at any time. `state/` can be rebuilt by `sync check`. `config.toml`, `sources.toml`, `providers/` and `adapters/` are user data and are never deleted by a clean.
 - Every file in the home carries a schema version. A newer file than the tool understands is never rewritten; the tool says so and exits with the unavailable code.
 - The home is created mode 0700. Secrets are never stored in it; a provider file holds a `secret://` reference, never the value.
@@ -69,11 +69,11 @@ Settings resolve through layers, lowest to highest precedence:
 3. account: values tied to a named account
 4. project: the project's own overrides under `projects-root/<project>/`
 5. agent: values for one agent or sub-agent inside that project
-6. environment and flags: `AGENTRC_*` variables, then command-line flags
+6. environment and flags: `STRATARC_*` variables, then command-line flags
 
 A higher layer replaces a scalar, merges a table key by key and, for lists, either replaces or extends according to an explicit `mode` in the file; there is no implicit append.
 
-`agentrc config explain <key> [--project P] [--agent A] [--account X]` prints the resolution chain for one key:
+`stratarc config explain <key> [--project P] [--agent A] [--account X]` prints the resolution chain for one key:
 
 ```text
 permissions.network.allow   (project: notes-cli, agent: reviewer, runtime: codex)
@@ -84,7 +84,7 @@ permissions.network.allow   (project: notes-cli, agent: reviewer, runtime: codex
 result: ["api.example.com"]   decided by: project (replace)
 ```
 
-`explain` also covers dispatch. For a sub-agent started by another agent, the relay is shown as part of the chain: which parent's settings it inherited, which it did not, and where the account came from. `agentrc config explain --tree` prints the whole inheritance tree for a project as a pruned outline, down to the file and line that wrote every value.
+`explain` also covers dispatch. For a sub-agent started by another agent, the relay is shown as part of the chain: which parent's settings it inherited, which it did not, and where the account came from. `stratarc config explain --tree` prints the whole inheritance tree for a project as a pruned outline, down to the file and line that wrote every value.
 
 ## providers-and-adapters
 
@@ -96,15 +96,15 @@ An adapter is the translator from the source to one runtime. Registration is exp
 - Each adapter declares a `supports` range for the runtime version it targets. `adapter status` compares that range with the installed runtime and the schema the source uses, and prints one line per adapter: `ok`, `outdated`, `unsupported` or `unknown`.
 - `sync` refuses to deploy through an `unsupported` adapter. For `outdated` it warns once per run and continues.
 - `adapter deprecate <name>` marks an adapter as no longer supported, with a reason and an end date. The next interactive command prompts once, naming the adapter, what it affects and the replacement, and records the answer. Noninteractive runs print the same message and continue without prompting.
-- Maintenance when a runtime changes: a contributor commits an adapter update with its new `supports` range and a fixture captured from the runtime. `agentrc adapter status` and CI then show which adapters fall outside which runtime versions.
+- Maintenance when a runtime changes: a contributor commits an adapter update with its new `supports` range and a fixture captured from the runtime. `stratarc adapter status` and CI then show which adapters fall outside which runtime versions.
 
 Adapters declare what they write, so `prune` and `verify` know which files are theirs.
 
 ## the-change-log
 
-Logging is off until enabled with `agentrc log enable`, or `logging = true` in `config.toml`. The human readable log is on by default and is a plain file.
+Logging is off until enabled with `stratarc log enable`, or `logging = true` in `config.toml`. The human readable log is on by default and is a plain file.
 
-The optional log is a SQLite database at `~/.agentrc/logs/changes.db`. Each change is one row in `changes`, linked to rows in `targets` and `projects`.
+The optional log is a SQLite database at `~/.stratarc/logs/changes.db`. Each change is one row in `changes`, linked to rows in `targets` and `projects`.
 
 | column | meaning |
 |---|---|
@@ -119,11 +119,11 @@ The optional log is a SQLite database at `~/.agentrc/logs/changes.db`. Each chan
 | `source_ref` | commit, branch or `uncommitted` for the source root |
 | `cause_id` | the change that caused this one, for propagated writes |
 
-Values pass the same token-shape redaction as every other captured content before they are written. The same events are appended to `agentrc.jsonl` in a fixed envelope (stable id, actor, digests, timestamp, status), so another tool can read the file without the database. `log explain <id>` prints a change as a short story: who asked for it, what layer it touched, which projects and runtimes it reached, and whether verification confirmed it.
+Values pass the same token-shape redaction as every other captured content before they are written. The same events are appended to `stratarc.jsonl` in a fixed envelope (stable id, actor, digests, timestamp, status), so another tool can read the file without the database. `log explain <id>` prints a change as a short story: who asked for it, what layer it touched, which projects and runtimes it reached, and whether verification confirmed it.
 
 ## verification
 
-`agentrc verify run` is the recursive test that a change landed. For a chosen scope (everything, one project, or one change id) it:
+`stratarc verify run` is the recursive test that a change landed. For a chosen scope (everything, one project, or one change id) it:
 
 1. re-resolves every layer from the source files,
 2. re-renders each affected runtime into a temporary stage,
@@ -139,8 +139,8 @@ Every message has an id (`msg-` plus a number) and lives in one catalog file, so
 
 ```text
 error msg-1042  The adapter "codex" does not support Codex 0.9.
-  It declares support for 0.4 to 0.8. Update the adapter with `agentrc adapter register`, or pin Codex to 0.8.
-  See: agentrc adapter status
+  It declares support for 0.4 to 0.8. Update the adapter with `stratarc adapter register`, or pin Codex to 0.8.
+  See: stratarc adapter status
 ```
 
 Exit codes: 0 ok, 1 failure, 2 invalid input, 3 denied, 4 conflict, 5 unavailable, 6 drift or verification failed, 130 interrupted. Human output goes to standard error for messages and standard output for data; with `--json` the envelope has `ok`, `data`, `error` (`code`, `message`, `param`, `hint`) and paging fields where a list is truncated.
@@ -149,33 +149,33 @@ The catalog starts with the failures the commands can hit: missing or unreadable
 
 ## permissions
 
-Every command declares the access it needs, and `agentrc doctor --permissions` prints the table. Read commands need read access to the source root, the home and the target directories. Write commands need write access to the same places and nothing else. No command needs network access except `provider test`. No command runs a program except an adapter's declared hooks, which are listed before they run. A command that would write outside the source root, the home or a registered target stops with the denied code.
+Every command declares the access it needs, and `stratarc doctor --permissions` prints the table. Read commands need read access to the source root, the home and the target directories. Write commands need write access to the same places and nothing else. No command needs network access except `provider test`. No command runs a program except an adapter's declared hooks, which are listed before they run. A command that would write outside the source root, the home or a registered target stops with the denied code.
 
 ## local-read-api
 
-`agentrc api serve` starts a read-only interface on a Unix socket (or loopback port with `--port`), with no authentication beyond the socket's file mode. It exposes the same data as `list`, `show`, `explain` and `log` commands, with a versioned schema published by `api schema`. Paging, error envelope and exit semantics match the command line. A graph or dashboard service can read it directly, or ingest `agentrc.jsonl`, to show inheritance trees and change history without reading the source files. Writes through the API are out of scope for the first release.
+`stratarc api serve` starts a read-only interface on a Unix socket (or loopback port with `--port`), with no authentication beyond the socket's file mode. It exposes the same data as `list`, `show`, `explain` and `log` commands, with a versioned schema published by `api schema`. Paging, error envelope and exit semantics match the command line. A graph or dashboard service can read it directly, or ingest `stratarc.jsonl`, to show inheritance trees and change history without reading the source files. Writes through the API are out of scope for the first release.
 
 ## terminal-interface
 
-`agentrc ui` opens a full-screen view built for an 80 by 24 terminal with a monochrome fallback. Left, the tree of source, projects and agents; right, the selected node with its resolved values; below, a one-line key help. `e` edits the owning file, `x` explains the selected value, `l` opens its log entries, `s` previews a sync and `v` runs verify. Every action is the same library call its command uses, and the view is tested in a pseudo-terminal.
+`stratarc ui` opens a full-screen view built for an 80 by 24 terminal with a monochrome fallback. Left, the tree of source, projects and agents; right, the selected node with its resolved values; below, a one-line key help. `e` edits the owning file, `x` explains the selected value, `l` opens its log entries, `s` previews a sync and `v` runs verify. Every action is the same library call its command uses, and the view is tested in a pseudo-terminal.
 
 ## first-run-and-docs
 
-First run is a choice, not a scan. `agentrc` with no arguments in a new home shows a one-screen welcome: the version, the detected runtimes, and three numbered steps (`source init`, `runtime enable`, `sync plan`). It never reads or migrates existing configuration without being told. The banner is one line and the start time budget is under 150 ms for a command that does not touch the disk beyond the home; `doctor` reports the measured start time.
+First run is a choice, not a scan. `stratarc` with no arguments in a new home shows a one-screen welcome: the version, the detected runtimes, and three numbered steps (`source init`, `runtime enable`, `sync plan`). It never reads or migrates existing configuration without being told. The banner is one line and the start time budget is under 150 ms for a command that does not touch the disk beyond the home; `doctor` reports the measured start time.
 
 The documentation site is built from the files in `docs/`, with the command reference and the error catalog generated from the code so they cannot drift. The landing page leads with a 30 second demo of `config explain`, then the install, then the tutorial for a first source root. Every error message links to its catalog entry by id. A load screen is a static page with the wordmark and the three first-run steps; it contains no animation and no script that blocks the page.
 
 ## debugging-and-bugs
 
-`--debug` turns on step logging, writes a redacted bundle to `~/.agentrc/state/debug/` and prints its path. `agentrc doctor --report` produces the same bundle for an issue. An import or adapter failure names the module and the registered path, so a broken third-party adapter is not mistaken for a broken install. A bug found by `verify` or `doctor` is recorded in the log with its command and digests, which is the reproduction a maintainer needs.
+`--debug` turns on step logging, writes a redacted bundle to `~/.stratarc/state/debug/` and prints its path. `stratarc doctor --report` produces the same bundle for an issue. An import or adapter failure names the module and the registered path, so a broken third-party adapter is not mistaken for a broken install. A bug found by `verify` or `doctor` is recorded in the log with its command and digests, which is the reproduction a maintainer needs.
 
 ## ci
 
-Every check a contributor can run is the check CI runs, with the same command: `agentrc check`, `agentrc verify run --scope all` over the bundled example, the schema and catalog checks, and the test suite. Documentation tables for commands and errors are regenerated in CI and the build fails if they differ from the committed files.
+Every check a contributor can run is the check CI runs, with the same command: `stratarc check`, `stratarc verify run --scope all` over the bundled example, the schema and catalog checks, and the test suite. Documentation tables for commands and errors are regenerated in CI and the build fails if they differ from the committed files.
 
 ## open-decisions
 
-- The command name. Another published project already installs a binary called `agentrc`, so two installs on one machine would collide; the name needs a decision before the first publish.
-- Whether `~/.agentrc` should be the primary home or an alias for the XDG path.
+- Resolved: the command name. The product was renamed from agentrc to `stratarc` because another published project installs a binary named agentrc.
+- Whether `~/.stratarc` should be the primary home or an alias for the XDG path.
 - Which Python library draws the terminal interface; Textual is the working choice.
 - Whether list-valued settings default to replace or extend when a file leaves `mode` out. The design refuses; a default would be friendlier.

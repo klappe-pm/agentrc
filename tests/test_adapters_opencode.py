@@ -13,9 +13,9 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from agentrc.adapters._common import owned_dir_entries
-from agentrc.adapters._text import strip_jsonc_comments
-from agentrc.adapters.opencode import (
+from stratarc.adapters._common import owned_dir_entries
+from stratarc.adapters._text import strip_jsonc_comments
+from stratarc.adapters.opencode import (
     _build_agent_frontmatter,
     _translate_command_frontmatter,
     _translate_tools_to_permission,
@@ -25,9 +25,9 @@ from agentrc.adapters.opencode import (
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 # The OpenCode config schema, downloaded from https://opencode.ai/config.json
@@ -468,9 +468,9 @@ class TestSync(unittest.TestCase):
         )
         actions = sync(self.source, self.target)
         self.assertTrue(any("copy hooks/guard.sh" in action for action in actions))
-        self.assertIn("install plugins/agentrc-hooks.ts", actions)
+        self.assertIn("install plugins/stratarc-hooks.ts", actions)
         self.assertTrue((self.target / "hooks" / "guard.sh").exists())
-        self.assertTrue((self.target / "plugins" / "agentrc-hooks.ts").exists())
+        self.assertTrue((self.target / "plugins" / "stratarc-hooks.ts").exists())
 
     def test_skills_mirrored(self):
         self._write(
@@ -625,7 +625,7 @@ class TestIdempotent(unittest.TestCase):
 class TestCanonicalOpenCodeBridge(unittest.TestCase):
     def test_post_write_reconciles_control_plane(self):
         bridge = (
-            Path(__file__).resolve().parents[1] / "agentrc" / "data" / "hooks" / "opencode-runtime-hooks.ts"
+            Path(__file__).resolve().parents[1] / "stratarc" / "data" / "hooks" / "opencode-runtime-hooks.ts"
         )
         source = bridge.read_text()
         self.assertIn(
@@ -646,7 +646,7 @@ class TestCanonicalOpenCodeBridge(unittest.TestCase):
         SessionStart call.
         """
         bridge = (
-            Path(__file__).resolve().parents[1] / "agentrc" / "data" / "hooks" / "opencode-runtime-hooks.ts"
+            Path(__file__).resolve().parents[1] / "stratarc" / "data" / "hooks" / "opencode-runtime-hooks.ts"
         )
         source = bridge.read_text()
         created = source.index('if (event.type === "session.created") {')

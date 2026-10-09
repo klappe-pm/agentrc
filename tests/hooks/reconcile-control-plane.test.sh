@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)"
 HOOK="$DIR/reconcile-control-plane.sh"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/reconcile-hook-XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
@@ -166,15 +166,15 @@ cp "$DIR/lib/public-targets.py" "$real_root/hooks/lib/public-targets.py"
 printf '%s\n' '# agents' > "$real_root/AGENTS.md"
 printf '%s\n' '{"global": [], "common": [], "project": []}' > "$real_root/rules/tiers.json"
 printf '%s\n' '# control-plane' > "$real_root/control-plane.md"
-printf '%s\n' '{"targets": ["agentrc"]}' > "$real_root/projects-root/public-targets.json"
+printf '%s\n' '{"targets": ["stratarc"]}' > "$real_root/projects-root/public-targets.json"
 git -C "$real_root" init -q
 git -C "$real_root" -c user.name=fixture -c user.email=fixture@example.invalid commit -q --allow-empty -m fixture
 git init -q "$real_projects/active/demo"
-git init -q "$real_projects/active/agentrc"
+git init -q "$real_projects/active/stratarc"
 printf '%s' "{\"tool_input\":{\"file_path\":\"$real_root/rules/example.md\"}}" | LLM_ROOT="$real_root" LLM_ROOT_PROJECTS_DIR="$real_projects" bash "$HOOK"
 if [ -f "$real_projects/active/demo/.docs/llm-root-control-plane.md" ] \
-  && [ "$(ls -A "$real_projects/active/agentrc")" = ".git" ] \
-  && ! grep -q agentrc "$real_root/control-plane.md" \
+  && [ "$(ls -A "$real_projects/active/stratarc")" = ".git" ] \
+  && ! grep -q stratarc "$real_root/control-plane.md" \
   && grep -q '| demo | active |' "$real_root/control-plane.md"; then
   pass=$((pass + 1))
 else
@@ -185,14 +185,14 @@ else
   printf "%s\n" "reconcile-control-plane.test: skipped the real reconciler case: no scripts/reconcile-control-plane.py" >&2
 fi
 
-# AGENTRC_SOURCE names the source root and wins over LLM_ROOT.
+# STRATARC_SOURCE names the source root and wins over LLM_ROOT.
 rm -f "$marker"
-printf '%s' "{\"tool_input\":{\"file_path\":\"$root/rules/example.md\"}}" | AGENTRC_SOURCE="$root" LLM_ROOT="$scratch/elsewhere" RECONCILE_MARKER="$marker" bash "$HOOK"
-expect_ran "a write into the AGENTRC_SOURCE root" "$root"
+printf '%s' "{\"tool_input\":{\"file_path\":\"$root/rules/example.md\"}}" | STRATARC_SOURCE="$root" LLM_ROOT="$scratch/elsewhere" RECONCILE_MARKER="$marker" bash "$HOOK"
+expect_ran "a write into the STRATARC_SOURCE root" "$root"
 
 # With neither variable set the hook does nothing and exits 0.
 rm -f "$marker"
-printf '%s' "{\"tool_input\":{\"file_path\":\"$root/rules/example.md\"}}" | env -u AGENTRC_SOURCE -u LLM_ROOT RECONCILE_MARKER="$marker" bash "$HOOK"
+printf '%s' "{\"tool_input\":{\"file_path\":\"$root/rules/example.md\"}}" | env -u STRATARC_SOURCE -u LLM_ROOT RECONCILE_MARKER="$marker" bash "$HOOK"
 expect_skipped "an unset source root"
 
 printf 'reconcile-control-plane.test: %d passed, %d failed\n' "$pass" "$fail"

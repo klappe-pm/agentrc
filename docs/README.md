@@ -1,6 +1,6 @@
 # docs
 
-Documentation for people who use agentrc: you run the command, keep a source root and deploy it into your runtimes. It is arranged by the four [Diátaxis](https://diataxis.fr/) quadrants, so the folder a page sits in tells you what kind of page it is. If you change agentrc itself, the same shape exists under [developer-docs](../developer-docs/README.md).
+Documentation for people who use stratarc: you run the command, keep a source root and deploy it into your runtimes. It is arranged by the four [Diátaxis](https://diataxis.fr/) quadrants, so the folder a page sits in tells you what kind of page it is. If you change stratarc itself, the same shape exists under [developer-docs](../developer-docs/README.md).
 
 ## tutorials
 
@@ -12,11 +12,11 @@ Recipes for a specific goal, for someone who already knows the basics and wants 
 
 ## reference
 
-Lookup pages that describe the machinery as it is, with no instruction attached. [cli](reference/cli.md) lists every subcommand and exit status, [configuration](reference/configuration.md) lists every key in `agentrc.toml` and the schemas that validate the JSON files, and [runtimes](reference/runtimes/README.md) names each supported runtime with a page per runtime: [claude](reference/runtimes/claude.md), [codex](reference/runtimes/codex.md), [cursor](reference/runtimes/cursor.md), [gemini](reference/runtimes/gemini.md) and [opencode](reference/runtimes/opencode.md). Index: [reference](reference/README.md).
+Lookup pages that describe the machinery as it is, with no instruction attached. [cli](reference/cli.md) lists every subcommand and exit status, [configuration](reference/configuration.md) lists every key in `stratarc.toml` and the schemas that validate the JSON files, and [runtimes](reference/runtimes/README.md) names each supported runtime with a page per runtime: [claude](reference/runtimes/claude.md), [codex](reference/runtimes/codex.md), [cursor](reference/runtimes/cursor.md), [gemini](reference/runtimes/gemini.md) and [opencode](reference/runtimes/opencode.md). Index: [reference](reference/README.md).
 
 ## explanation
 
-Discussion that gives background and reasons, for a reader who wants to understand rather than act. [security model](explanation/security-model.md) explains what agentrc protects against, what it trusts and what it leaves to the runtimes. Index: [explanation](explanation/README.md).
+Discussion that gives background and reasons, for a reader who wants to understand rather than act. [security model](explanation/security-model.md) explains what stratarc protects against, what it trusts and what it leaves to the runtimes. Index: [explanation](explanation/README.md).
 
 ## documentation-guide
 

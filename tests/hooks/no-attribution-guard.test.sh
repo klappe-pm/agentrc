@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)/no-attribution-guard.sh"
+SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)/no-attribution-guard.sh"
 
 AGENT="Cla""ude"
 AGENT_LOWER="cla""ude"
@@ -124,7 +124,7 @@ rm -rf "$BODY_DIR"
 
 # A-03: the guard is registered once, on every tool, so a GitHub writer from any
 # MCP server reaches it and no tool runs it twice.
-HOOKS_JSON="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)/hooks.json"
+HOOKS_JSON="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)/hooks.json"
 registration="$(python3 -c '
 import json, sys
 groups = json.load(open(sys.argv[1]))["PreToolUse"]

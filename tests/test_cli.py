@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import __version__
-from agentrc.cli import STUBS, TEMPLATE, main
-from agentrc.resources import data_dir
+from stratarc import __version__
+from stratarc.cli import STUBS, TEMPLATE, main
+from stratarc.resources import data_dir
 from conftest import REPO_ROOT, tree_snapshot
 
 
@@ -20,7 +20,7 @@ def _template_root() -> Path:
 @pytest.mark.parametrize("name", STUBS)
 def test_stub_exits_2(name, capsys):
     assert main([name]) == 2
-    assert capsys.readouterr().err.strip() == f"agentrc {name}: not yet extracted"
+    assert capsys.readouterr().err.strip() == f"stratarc {name}: not yet extracted"
 
 
 def test_version(capsys):
@@ -32,13 +32,13 @@ def test_version(capsys):
 
 def test_python_dash_m_entry():
     result = subprocess.run(
-        [sys.executable, "-m", "agentrc", "sync"],
+        [sys.executable, "-m", "stratarc", "sync"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
     )
     assert result.returncode == 2
-    assert "agentrc sync: not yet extracted" in result.stderr
+    assert "stratarc sync: not yet extracted" in result.stderr
 
 
 def test_init_copies_template_tree(tmp_path: Path):

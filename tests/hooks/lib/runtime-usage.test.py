@@ -27,7 +27,7 @@ from pathlib import Path
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-LIB = HERE.parents[2] / "agentrc" / "data" / "hooks" / "lib"
+LIB = HERE.parents[2] / "stratarc" / "data" / "hooks" / "lib"
 FIXTURE_HOME = HERE / "fixtures" / "runtime-usage" / "codex"
 DAY = FIXTURE_HOME / "sessions" / "2026" / "09" / "23"
 

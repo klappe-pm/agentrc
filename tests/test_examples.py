@@ -135,7 +135,7 @@ def test_exempt_files_exist() -> None:
 
 
 def enabled_runtimes() -> list[str]:
-    config = tomllib.loads((SOURCE / "agentrc.toml").read_text(encoding="utf-8"))
+    config = tomllib.loads((SOURCE / "stratarc.toml").read_text(encoding="utf-8"))
     return sorted(name for name, table in config["runtimes"].items() if table.get("enabled"))
 
 

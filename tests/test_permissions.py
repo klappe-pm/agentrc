@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import permissions
+from stratarc import permissions
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "permissions"
 
@@ -89,12 +89,12 @@ def test_load_rejects_a_wrong_schema_version(tmp_path):
         permissions.load(tmp_path)
 
 
-def test_trusted_repo_roots_expand_the_tilde_against_the_engine_home(policy, agentrc_home):
-    """`~` in additionalDirectories resolves through agentrc.paths.home(), so AGENTRC_HOME redirects it."""
-    repo = agentrc_home / "projects" / "demo"
+def test_trusted_repo_roots_expand_the_tilde_against_the_engine_home(policy, stratarc_home):
+    """`~` in additionalDirectories resolves through stratarc.paths.home(), so STRATARC_HOME redirects it."""
+    repo = stratarc_home / "projects" / "demo"
     (repo / ".git").mkdir(parents=True)
     assert permissions.trusted_repo_roots(policy) == [repo]
 
 
-def test_trusted_repo_roots_ignore_a_missing_directory(policy, agentrc_home):
+def test_trusted_repo_roots_ignore_a_missing_directory(policy, stratarc_home):
     assert permissions.trusted_repo_roots(policy) == []

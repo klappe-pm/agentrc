@@ -16,18 +16,18 @@ from pathlib import Path
 import pytest
 
 
-from agentrc.adapters import _components as c  # noqa: E402
+from stratarc.adapters import _components as c  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 
 def server(name, **extra):
-    entry = {"name": name, "wanted": True, "owner": "agentrc", "runtimes": ["codex", "gemini", "opencode", "claude"]}
+    entry = {"name": name, "wanted": True, "owner": "stratarc", "runtimes": ["codex", "gemini", "opencode", "claude"]}
     entry.update(extra)
     return entry
 

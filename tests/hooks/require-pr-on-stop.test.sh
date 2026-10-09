@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)"
 HOOK="${REQUIRE_PR_HOOK:-$DIR/require-pr-on-stop.sh}"
 # The scratch path is resolved physically so HOME matches what git rev-parse --show-toplevel
 # reports; otherwise /tmp versus /private/tmp would keep the worktree fallback from ever matching.

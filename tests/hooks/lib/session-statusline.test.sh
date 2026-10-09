@@ -15,7 +15,7 @@ set -euo pipefail
 # themselves, so an inherited value must not leak into the unset cases.
 unset LLM_ROOT_BUDGET_FILE
 
-LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/hooks/lib" && pwd)"
+LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/hooks/lib" && pwd)"
 SCRIPT="$LIB/session-statusline.py"
 
 PASS=0

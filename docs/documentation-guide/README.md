@@ -1,6 +1,6 @@
 # documentation-guide
 
-This guide says where a document goes in this repository and what each kind of page is for, so a new page lands where its readers will look for it. The documentation follows [Diátaxis](https://diataxis.fr/): every page is one of four kinds, and the folder it sits in names the kind. Two trees hold the same five folders, [docs](../README.md) for people who use agentrc and [developer-docs](../../developer-docs/README.md) for people who change it. Pick the tree by audience first, then the folder by kind.
+This guide says where a document goes in this repository and what each kind of page is for, so a new page lands where its readers will look for it. The documentation follows [Diátaxis](https://diataxis.fr/): every page is one of four kinds, and the folder it sits in names the kind. Two trees hold the same five folders, [docs](../README.md) for people who use stratarc and [developer-docs](../../developer-docs/README.md) for people who change it. Pick the tree by audience first, then the folder by kind.
 
 ## where-a-document-goes
 

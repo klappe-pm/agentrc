@@ -1,6 +1,6 @@
 """Parity of the two public-target readers.
 
-hooks/lib/public-targets.py (imported through agentrc.public_targets) is the one definition of which checkouts are public. hooks/lib/attribution-detect.py carries a local copy of the same logic because the carried guard ships alone in a project's tracked .claude/hooks/lib. These tests hold the two to the same answers on the same fixtures: a plain checkout named after the target, a linked worktree of a target repository, a checkout whose origin slug matches owner/repo, a non-target, and a present but unreadable list.
+hooks/lib/public-targets.py (imported through stratarc.public_targets) is the one definition of which checkouts are public. hooks/lib/attribution-detect.py carries a local copy of the same logic because the carried guard ships alone in a project's tracked .claude/hooks/lib. These tests hold the two to the same answers on the same fixtures: a plain checkout named after the target, a linked worktree of a target repository, a checkout whose origin slug matches owner/repo, a non-target, and a present but unreadable list.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import public_targets
-from agentrc.resources import data_dir
+from stratarc import public_targets
+from stratarc.resources import data_dir
 
 
 def _load_detector():
@@ -68,10 +68,10 @@ class Fixture:
         return detect._public_checkout({"file_path": str(file)}, str(self.tmp))
 
     def checkouts(self) -> dict[str, tuple[Path, bool]]:
-        """Each fixture: a file path inside a checkout, and whether {"agentrc", "owner/repo"} makes it public."""
-        plain = _checkout(self.projects / "agentrc", "https://github.com/someone/other.git")
+        """Each fixture: a file path inside a checkout, and whether {"stratarc", "owner/repo"} makes it public."""
+        plain = _checkout(self.projects / "stratarc", "https://github.com/someone/other.git")
         _git("-C", str(plain), "commit", "-q", "--allow-empty", "-m", "base")
-        worktree = self.projects / "agentrc-feature-wt"
+        worktree = self.projects / "stratarc-feature-wt"
         _git("-C", str(plain), "worktree", "add", "-q", "-b", "feature", str(worktree))
         slug = _checkout(self.projects / "renamed-clone", "git@github.com:Owner/Repo.git")
         slug_worktree_base = _checkout(self.projects / "other-name", "https://github.com/owner/repo")
@@ -92,13 +92,13 @@ class Fixture:
 
 @pytest.fixture
 def fx(tmp_path, source_root, monkeypatch) -> Fixture:
-    monkeypatch.delenv("AGENTRC_PUBLIC", raising=False)
+    monkeypatch.delenv("STRATARC_PUBLIC", raising=False)
     monkeypatch.delenv("LLM_ROOT", raising=False)
     return Fixture(tmp_path.resolve(), source_root)
 
 
 def test_both_readers_resolve_the_same_identity_for_every_fixture(fx):
-    fx.write_list('{"targets": ["agentrc", "OWNER/repo"]}\n')
+    fx.write_list('{"targets": ["stratarc", "OWNER/repo"]}\n')
     for label, (file, expected) in fx.checkouts().items():
         assert fx.engine(file) == expected, label
         assert fx.carried(file) == expected, label
@@ -106,13 +106,13 @@ def test_both_readers_resolve_the_same_identity_for_every_fixture(fx):
 
 def test_a_linked_worktree_is_public_only_through_its_main_worktree_name(fx):
     """The worktree directory is not named in the list; its main worktree is. Reading only the toplevel's own name would call it private in both readers."""
-    fx.write_list('["agentrc"]\n')
+    fx.write_list('["stratarc"]\n')
     worktree_file = fx.checkouts()["linked worktree of the target repository"][0]
-    assert worktree_file.parent.parent.name not in {"agentrc"}
+    assert worktree_file.parent.parent.name not in {"stratarc"}
     assert fx.engine(worktree_file)
     assert fx.carried(worktree_file)
     names, _slug = public_targets.checkout_identity(worktree_file.parent)
-    assert names == frozenset({"agentrc-feature-wt", "agentrc"})
+    assert names == frozenset({"stratarc-feature-wt", "stratarc"})
 
 
 @pytest.mark.parametrize(
@@ -132,7 +132,7 @@ def test_a_missing_list_declares_nothing_in_both_readers(fx):
         assert not fx.carried(file), label
 
 
-@pytest.mark.parametrize("broken", ["{not json", '"agentrc"', '{"targets": "agentrc"}', '{"targets": [1]}', "[1]", '[""]'])
+@pytest.mark.parametrize("broken", ["{not json", '"stratarc"', '{"targets": "stratarc"}', '{"targets": [1]}', "[1]", '[""]'])
 def test_an_unreadable_list_raises_in_the_module_and_fails_closed_in_the_detector(fx, broken):
     checkouts = fx.checkouts()
     fx.write_list(broken)
@@ -146,7 +146,7 @@ def test_an_unreadable_list_raises_in_the_module_and_fails_closed_in_the_detecto
 
 @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads a mode 0 file")
 def test_a_list_that_exists_but_cannot_be_opened_fails_closed_in_both(fx):
-    fx.write_list('["agentrc"]\n')
+    fx.write_list('["stratarc"]\n')
     path = fx.source / "projects-root" / "public-targets.json"
     path.chmod(0)
     try:
@@ -159,13 +159,13 @@ def test_a_list_that_exists_but_cannot_be_opened_fails_closed_in_both(fx):
 
 
 def test_both_readers_agree_on_a_list_object_with_a_comment_key(fx):
-    fx.write_list(json.dumps({"$comment": "fixture", "targets": ["agentrc"]}))
-    assert public_targets.load_public_targets(fx.source) == frozenset({"agentrc"})
-    assert detect._public_targets() == frozenset({"agentrc"})
+    fx.write_list(json.dumps({"$comment": "fixture", "targets": ["stratarc"]}))
+    assert public_targets.load_public_targets(fx.source) == frozenset({"stratarc"})
+    assert detect._public_targets() == frozenset({"stratarc"})
 
 
 def test_the_module_loads_the_reader_from_package_data():
     """The implementation is the packaged hooks/lib file, found through importlib.resources and not through the module's own location."""
-    assert Path(public_targets._module.__file__).as_posix().endswith("agentrc/data/hooks/lib/public-targets.py")
+    assert Path(public_targets._module.__file__).as_posix().endswith("stratarc/data/hooks/lib/public-targets.py")
     for name in public_targets.__all__:
         assert hasattr(public_targets, name)

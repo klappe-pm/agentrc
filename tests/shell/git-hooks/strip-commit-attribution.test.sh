@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Behavioral tests for agentrc/data/git-hooks/strip-commit-attribution.sh
+# Behavioral tests for stratarc/data/git-hooks/strip-commit-attribution.sh
 #
 # The commit-msg backstop must remove agent attribution from a message file in
 # place, keep the subject and body, leave a clean message byte for byte alone,
@@ -14,7 +14,7 @@ set -euo pipefail
 # it set so both paths are proven.
 unset ALLOW_AGENT_ATTRIBUTION
 
-STRIP="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/git-hooks" && pwd)/strip-commit-attribution.sh"
+STRIP="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/git-hooks" && pwd)/strip-commit-attribution.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

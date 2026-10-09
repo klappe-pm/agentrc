@@ -1,11 +1,11 @@
 approval_policy = "on-request"
-default_permissions = "agentrc"
+default_permissions = "stratarc"
 
-# BEGIN agentrc permissions, generated from permissions.json
-[permissions.agentrc]
+# BEGIN stratarc permissions, generated from permissions.json
+[permissions.stratarc]
 extends = ":workspace"
 
-[permissions.agentrc.workspace_roots]
+[permissions.stratarc.workspace_roots]
 "~/projects" = true
 "~/.claude" = true
 "~/.codex" = true
@@ -13,10 +13,10 @@ extends = ":workspace"
 "~/.cursor" = true
 "~/.config/opencode" = true
 
-[permissions.agentrc.filesystem.":workspace_roots"]
+[permissions.stratarc.filesystem.":workspace_roots"]
 "**/.env" = "deny"
 
-[permissions.agentrc.network]
+[permissions.stratarc.network]
 enabled = false
 
-# END agentrc permissions
+# END stratarc permissions

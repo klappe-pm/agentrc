@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/git-hooks" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/git-hooks" && pwd)"
 HOOK="$SCRIPT_DIR/pre-commit"
 
 PASS=0
@@ -20,7 +20,7 @@ FAIL=0
 # bootstrap is written once.
 new_repo() {
   local temp
-  temp="$(mktemp -d -t agentrc-pre-commit-test.XXXXXXXXXX)"
+  temp="$(mktemp -d -t stratarc-pre-commit-test.XXXXXXXXXX)"
   git -C "$temp" init -q managed-project
   git -C "$temp/managed-project" config user.email t@t.test
   git -C "$temp/managed-project" config user.name test

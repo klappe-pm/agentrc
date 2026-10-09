@@ -12,7 +12,7 @@ import pytest
 
 SCHEMAS = ("hooks", "permissions", "components")
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "schema"
-REFERENCE_ENV = "AGENTRC_SCHEMA_REFERENCE_DIR"
+REFERENCE_ENV = "STRATARC_SCHEMA_REFERENCE_DIR"
 REFERENCE_FILES = {
     "hooks": Path("hooks") / "hooks.json",
     "permissions": Path("permissions.json"),
@@ -21,7 +21,7 @@ REFERENCE_FILES = {
 
 
 def load_schema(name: str) -> dict:
-    resource = files("agentrc") / "data" / "schema" / f"{name}.schema.json"
+    resource = files("stratarc") / "data" / "schema" / f"{name}.schema.json"
     return json.loads(resource.read_text(encoding="utf-8"))
 
 

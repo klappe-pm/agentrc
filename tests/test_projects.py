@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import paths, projects, staging
-from agentrc.control_plane import ControlPlane
-from agentrc.rules_digest import CANONICAL_RULES_PREFIX, DIGEST_BEGIN, DIGEST_END, rules_prefix
+from stratarc import paths, projects, staging
+from stratarc.control_plane import ControlPlane
+from stratarc.rules_digest import CANONICAL_RULES_PREFIX, DIGEST_BEGIN, DIGEST_END, rules_prefix
 
 GIT_IDENTITY = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid"]
 
@@ -73,13 +73,13 @@ class World:
 
 
 @pytest.fixture
-def world(tmp_path, monkeypatch, agentrc_home):
+def world(tmp_path, monkeypatch, stratarc_home):
     root = tmp_path / "source"
     root.mkdir()
     projects_dir = tmp_path / "projects"
     projects_dir.mkdir()
     monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(projects_dir))
-    monkeypatch.setenv("AGENTRC_SOURCE", str(root))
+    monkeypatch.setenv("STRATARC_SOURCE", str(root))
     for name in ("ROOT", "PROJECTS_SRC", "RETIRED_RULES", "RETIRED_HOOKS", "_ROOT_CONFIGURED"):
         monkeypatch.setattr(projects, name, getattr(projects, name))
     monkeypatch.setattr(projects, "RENDERERS", {})
@@ -172,8 +172,8 @@ def test_a_written_manifest_does_not_trip_gitleaks(tmp_path):
 
 
 def test_the_delivered_manifest_is_named_for_the_engine(world):
-    assert projects.delivered_manifest() == Path(".claude/agentrc-delivered.json")
-    write(world.root / "agentrc.toml", 'name = "mytool"\n')
+    assert projects.delivered_manifest() == Path(".claude/stratarc-delivered.json")
+    write(world.root / "stratarc.toml", 'name = "mytool"\n')
     assert projects.delivered_manifest() == Path(".claude/mytool-delivered.json")
 
 
@@ -237,9 +237,9 @@ def test_verify_does_not_report_a_public_target_checkout(world):
 # projects directory
 
 
-def test_projects_dir_lifts_the_default_active_folder_to_its_parent(world, monkeypatch, agentrc_home):
+def test_projects_dir_lifts_the_default_active_folder_to_its_parent(world, monkeypatch, stratarc_home):
     monkeypatch.delenv("LLM_ROOT_PROJECTS_DIR")
-    assert projects.projects_dir() == agentrc_home / "projects"
+    assert projects.projects_dir() == stratarc_home / "projects"
 
 
 def test_projects_dir_uses_the_environment_value_as_given(world):
@@ -305,7 +305,7 @@ def test_resolve_without_a_control_plane_skips_an_ambiguous_name(world):
 
 def test_a_checkout_with_a_config_file_is_a_source_tree(world):
     checkout = world.checkout("other-source")
-    write(checkout / "agentrc.toml", "")
+    write(checkout / "stratarc.toml", "")
     dst, why = projects.resolve("other-source", FakeControlPlane({"other-source": ("active", "normal")}))
     assert dst is None
     assert "source tree" in why
@@ -1738,7 +1738,7 @@ def test_adopt_does_not_capture_an_unrecorded_shared_skill_from_the_agents_tree(
 
 
 def test_the_sync_and_the_reconciler_share_stagings_directories():
-    from agentrc import reconcile
+    from stratarc import reconcile
 
     assert "skills" in staging.PROJECT_DIRECTORIES
     assert projects.CLAUDE_DIRS is staging.PROJECT_DIRECTORIES
@@ -1765,11 +1765,11 @@ COMPONENTS = {
         {"name": "plug", "runtimes": ["claude"], "owner": "anthropic", "wanted": True, "marketplace": "m"},
     ],
     "mcp_servers": [
-        {"name": "srv", "runtimes": ["claude"], "owner": "agentrc", "wanted": True, "command": "srv", "args": ["--stdio"]},
+        {"name": "srv", "runtimes": ["claude"], "owner": "stratarc", "wanted": True, "command": "srv", "args": ["--stdio"]},
         {
             "name": "vault",
             "runtimes": ["claude"],
-            "owner": "agentrc",
+            "owner": "stratarc",
             "wanted": True,
             "command": "v",
             "env": {"KEY": "secret://vault/key"},
@@ -1838,10 +1838,10 @@ def account_servers(home: Path, checkout: Path) -> dict:
     return account["projects"][str(checkout.resolve())].get("mcpServers", {})
 
 
-def test_the_selection_lands_in_local_scope_and_no_tracked_file(world, components, agentrc_home):
+def test_the_selection_lands_in_local_scope_and_no_tracked_file(world, components, stratarc_home):
     _acts, err = sync_components(world, on=True)
     assert local_settings(components)["enabledPlugins"] == {"plug@m": True}
-    assert account_servers(agentrc_home, components) == {"srv": {"command": "srv", "args": ["--stdio"], "type": "stdio"}}
+    assert account_servers(stratarc_home, components) == {"srv": {"command": "srv", "args": ["--stdio"], "type": "stdio"}}
     # A secret:// value is never written unresolved; it is named instead.
     assert "vault" in err
     settings = json.loads((components / ".claude" / "settings.json").read_text())
@@ -1872,14 +1872,14 @@ def test_a_local_ignore_override_prevents_settings_creation(world, components):
     assert exclude.read_text().count("/.claude/settings.local.json") == 1
 
 
-def test_merge_by_key_keeps_every_other_key_and_hand_added_entry(world, components, agentrc_home):
+def test_merge_by_key_keeps_every_other_key_and_hand_added_entry(world, components, stratarc_home):
     write(
         components / ".claude" / "settings.local.json",
         json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}, "enabledPlugins": {"mine@x": True, "plug@m": False}}),
     )
     key = str(components.resolve())
     write(
-        agentrc_home / ".claude.json",
+        stratarc_home / ".claude.json",
         json.dumps({"numStartups": 3, "projects": {key: {"allowedTools": ["Read"], "mcpServers": {"handmade": {"command": "mine"}}}}}),
     )
     sync_components(world, on=True)
@@ -1887,13 +1887,13 @@ def test_merge_by_key_keeps_every_other_key_and_hand_added_entry(world, componen
         "permissions": {"allow": ["Bash(ls:*)"]},
         "enabledPlugins": {"mine@x": True, "plug@m": True},
     }
-    account = json.loads((agentrc_home / ".claude.json").read_text())
+    account = json.loads((stratarc_home / ".claude.json").read_text())
     assert account["numStartups"] == 3
     assert account["projects"][key]["allowedTools"] == ["Read"]
     assert sorted(account["projects"][key]["mcpServers"]) == ["handmade", "srv"]
 
 
-def test_clearing_the_cells_removes_only_what_the_manifest_declares(world, components, agentrc_home):
+def test_clearing_the_cells_removes_only_what_the_manifest_declares(world, components, stratarc_home):
     sync_components(world, on=True)
     local = local_settings(components)
     local["enabledPlugins"]["mine@x"] = True
@@ -1903,16 +1903,16 @@ def test_clearing_the_cells_removes_only_what_the_manifest_declares(world, compo
     assert any(".claude.json" in a for a in dry), dry
     sync_components(world, on=False)
     assert local_settings(components)["enabledPlugins"] == {"mine@x": True}
-    assert account_servers(agentrc_home, components) == {}
+    assert account_servers(stratarc_home, components) == {}
     assert sync_components(world, on=False)[0] == []
 
 
-def test_removed_manifest_declarations_prune_previous_project_keys(world, components, agentrc_home):
+def test_removed_manifest_declarations_prune_previous_project_keys(world, components, stratarc_home):
     sync_components(world, on=True)
     local = local_settings(components)
     local["enabledPlugins"]["mine@x"] = True
     write(components / ".claude" / "settings.local.json", json.dumps(local))
-    account_path = agentrc_home / ".claude.json"
+    account_path = stratarc_home / ".claude.json"
     account = json.loads(account_path.read_text())
     account["projects"][str(components.resolve())]["mcpServers"]["handmade"] = {"command": "mine"}
     account_path.write_text(json.dumps(account))
@@ -1922,7 +1922,7 @@ def test_removed_manifest_declarations_prune_previous_project_keys(world, compon
     assert any(".claude.json" in action for action in dry), dry
     sync_components(world, on=True)
     assert local_settings(components)["enabledPlugins"] == {"mine@x": True}
-    assert account_servers(agentrc_home, components) == {"handmade": {"command": "mine"}}
+    assert account_servers(stratarc_home, components) == {"handmade": {"command": "mine"}}
     assert sync_components(world, on=True)[0] == []
 
 
@@ -1934,10 +1934,10 @@ def test_a_marketplace_change_prunes_the_old_plugin_key(world, components):
     assert local_settings(components)["enabledPlugins"] == {"plug@new": True}
 
 
-def test_skipped_cleanup_keeps_previous_keys_for_a_later_sync(world, components, agentrc_home):
+def test_skipped_cleanup_keeps_previous_keys_for_a_later_sync(world, components, stratarc_home):
     sync_components(world, on=True)
     local_path = components / ".claude" / "settings.local.json"
-    account_path = agentrc_home / ".claude.json"
+    account_path = stratarc_home / ".claude.json"
     local, account = local_path.read_text(), account_path.read_text()
     local_path.write_text("{invalid")
     account_path.write_text("{invalid")
@@ -1947,16 +1947,16 @@ def test_skipped_cleanup_keeps_previous_keys_for_a_later_sync(world, components,
     account_path.write_text(account)
     sync_components(world, on=True)
     assert "enabledPlugins" not in local_settings(components)
-    assert account_servers(agentrc_home, components) == {}
+    assert account_servers(stratarc_home, components) == {}
 
 
-def test_the_account_file_keeps_its_permissions(world, components, agentrc_home):
-    account = write(agentrc_home / ".claude.json", "{}\n")
+def test_the_account_file_keeps_its_permissions(world, components, stratarc_home):
+    account = write(stratarc_home / ".claude.json", "{}\n")
     account.chmod(0o600)
     sync_components(world, on=True)
-    assert "srv" in account_servers(agentrc_home, components)
+    assert "srv" in account_servers(stratarc_home, components)
     assert account.stat().st_mode & 0o777 == 0o600
-    assert sorted(p.name for p in agentrc_home.iterdir()) == [".claude.json"]
+    assert sorted(p.name for p in stratarc_home.iterdir()) == [".claude.json"]
 
 
 def test_a_second_component_sync_is_current(world, components):
@@ -1973,33 +1973,33 @@ def test_a_tracked_settings_local_is_never_written(world, components):
 
 
 @pytest.mark.parametrize("refusal", ["tracked settings", "malformed settings", "malformed account"])
-def test_a_refused_component_render_is_reported_as_stale(world, components, agentrc_home, refusal):
+def test_a_refused_component_render_is_reported_as_stale(world, components, stratarc_home, refusal):
     sync_components(world, on=True)
     if refusal == "tracked settings":
         git("-C", str(components), "add", "-f", ".claude/settings.local.json")
     elif refusal == "malformed settings":
         (components / ".claude" / "settings.local.json").write_text("{invalid")
     else:
-        (agentrc_home / ".claude.json").write_text("{invalid")
+        (stratarc_home / ".claude.json").write_text("{invalid")
     actions, _err = sync_components(world, on=True, dry=True)
     assert any("component render blocked" in action for action in actions), actions
 
 
-def test_nothing_declared_touches_nothing(world, components, agentrc_home):
+def test_nothing_declared_touches_nothing(world, components, stratarc_home):
     write(world.root / "components.json", json.dumps({"version": 1}))
     sync_components(world, on=True)
     assert not (components / ".claude" / "settings.local.json").exists()
-    assert not (agentrc_home / ".claude.json").exists()
+    assert not (stratarc_home / ".claude.json").exists()
 
 
-def test_the_owner_of_a_declared_server_is_the_engine_name(world, components, agentrc_home):
+def test_the_owner_of_a_declared_server_is_the_engine_name(world, components, stratarc_home):
     """A server another owner installs is not the engine's to render."""
     foreign = json.loads(json.dumps(COMPONENTS))
     for server in foreign["mcp_servers"]:
         server["owner"] = "someone-else"
     write(world.root / "components.json", json.dumps(foreign))
     sync_components(world, on=True)
-    assert not (agentrc_home / ".claude.json").exists()
+    assert not (stratarc_home / ".claude.json").exists()
 
 
 # source trees are never targets
@@ -2092,7 +2092,7 @@ OWNER = "fixture-owner"
 
 @pytest.fixture
 def owner(monkeypatch):
-    monkeypatch.setenv("AGENTRC_GITHUB_OWNER", OWNER)
+    monkeypatch.setenv("STRATARC_GITHUB_OWNER", OWNER)
     return OWNER
 
 
@@ -2144,7 +2144,7 @@ def test_other_origins_receive_nothing(world, owner, origin):
 
 
 def test_no_configured_owner_means_no_origin_is_owned(world, monkeypatch):
-    monkeypatch.delenv("AGENTRC_GITHUB_OWNER", raising=False)
+    monkeypatch.delenv("STRATARC_GITHUB_OWNER", raising=False)
     checkout = origin_checkout(world, f"git@github.com:{OWNER}/proj.git")
     world.sync()
     assert not (checkout / ".github").exists()
@@ -2205,13 +2205,13 @@ def test_the_rendered_check_runs_in_the_project_with_the_carried_detector(world,
 
 
 def test_the_default_owner_is_empty(world, monkeypatch):
-    monkeypatch.delenv("AGENTRC_GITHUB_OWNER", raising=False)
+    monkeypatch.delenv("STRATARC_GITHUB_OWNER", raising=False)
     assert projects.github_owner() == ""
     assert not hasattr(projects, "DEFAULT_GITHUB_OWNER")
 
 
 def test_remotes_json_with_one_owner_wins(world, monkeypatch):
-    monkeypatch.setenv("AGENTRC_GITHUB_OWNER", "other")
+    monkeypatch.setenv("STRATARC_GITHUB_OWNER", "other")
     write(world.src / "remotes.json", json.dumps({"a": "someone/a", "b": "someone/b"}))
     assert projects.github_owner() == "someone"
 
@@ -2223,24 +2223,24 @@ def test_remotes_json_with_one_owner_wins(world, monkeypatch):
 def test_the_configuration_is_used_when_remotes_json_carries_no_single_owner(world, monkeypatch, remotes):
     if remotes is not None:
         write(world.src / "remotes.json", remotes)
-    monkeypatch.delenv("AGENTRC_GITHUB_OWNER", raising=False)
+    monkeypatch.delenv("STRATARC_GITHUB_OWNER", raising=False)
     assert projects.github_owner() == ""
-    monkeypatch.setenv("AGENTRC_GITHUB_OWNER", "other")
+    monkeypatch.setenv("STRATARC_GITHUB_OWNER", "other")
     assert projects.github_owner() == "other"
-    monkeypatch.setenv("AGENTRC_GITHUB_OWNER", "  ")
+    monkeypatch.setenv("STRATARC_GITHUB_OWNER", "  ")
     assert projects.github_owner() == ""
 
 
-def test_the_owner_comes_from_agentrc_toml_when_the_variable_is_unset(world, monkeypatch):
-    monkeypatch.delenv("AGENTRC_GITHUB_OWNER", raising=False)
-    write(world.root / "agentrc.toml", 'owner = "from-toml"\n')
+def test_the_owner_comes_from_stratarc_toml_when_the_variable_is_unset(world, monkeypatch):
+    monkeypatch.delenv("STRATARC_GITHUB_OWNER", raising=False)
+    write(world.root / "stratarc.toml", 'owner = "from-toml"\n')
     assert projects.github_owner() == "from-toml"
-    monkeypatch.setenv("AGENTRC_GITHUB_OWNER", "from-env")
+    monkeypatch.setenv("STRATARC_GITHUB_OWNER", "from-env")
     assert projects.github_owner() == "from-env"
 
 
 def test_the_rendered_check_follows_the_configured_owner(world, monkeypatch):
-    monkeypatch.delenv("AGENTRC_GITHUB_OWNER", raising=False)
+    monkeypatch.delenv("STRATARC_GITHUB_OWNER", raising=False)
     checkout = origin_checkout(world, "git@github.com:someone/proj.git")
     write(world.src / "remotes.json", json.dumps({"proj": "someone/proj"}))
     acts = world.sync()
@@ -2248,11 +2248,11 @@ def test_the_rendered_check_follows_the_configured_owner(world, monkeypatch):
     assert (checkout / CHECK).is_file()
     (world.src / "remotes.json").unlink()
     shutil.rmtree(checkout / ".github")
-    monkeypatch.setenv("AGENTRC_GITHUB_OWNER", "someone")
+    monkeypatch.setenv("STRATARC_GITHUB_OWNER", "someone")
     world.sync()
     assert (checkout / CHECK).is_file()
     shutil.rmtree(checkout / ".github")
-    monkeypatch.delenv("AGENTRC_GITHUB_OWNER")
+    monkeypatch.delenv("STRATARC_GITHUB_OWNER")
     acts = world.sync()
     assert not (checkout / ".github").exists(), acts
 
@@ -2262,13 +2262,13 @@ def test_the_rendered_check_follows_the_configured_owner(world, monkeypatch):
 
 @pytest.fixture
 def public(world):
-    """A delivered project, proj, beside a public target, agentrc, that has a checkout and a source directory."""
+    """A delivered project, proj, beside a public target, stratarc, that has a checkout and a source directory."""
     world.source()
     checkout = world.checkout()
-    world.source("agentrc", agents="# agentrc\n")
-    public_checkout = world.projects / "active" / "agentrc"
+    world.source("stratarc", agents="# stratarc\n")
+    public_checkout = world.projects / "active" / "stratarc"
     git("init", "-q", str(public_checkout))
-    write(world.src / "public-targets.json", '{"targets": ["agentrc"]}\n')
+    write(world.src / "public-targets.json", '{"targets": ["stratarc"]}\n')
     return checkout, public_checkout
 
 
@@ -2278,11 +2278,11 @@ def only_git(path: Path) -> list[str]:
 
 def test_a_public_target_receives_no_file_and_its_neighbour_is_unchanged(world, public):
     checkout, public_checkout = public
-    cp = FakeControlPlane({"proj": ("active", "normal"), "agentrc": ("active", "normal")})
+    cp = FakeControlPlane({"proj": ("active", "normal"), "stratarc": ("active", "normal")})
     for control_plane in (None, cp):
-        acts = world.sync("agentrc", cp=control_plane)
+        acts = world.sync("stratarc", cp=control_plane)
         assert len(acts) == 1, acts
-        assert acts[0].startswith("skip: agentrc is a public repository"), acts
+        assert acts[0].startswith("skip: stratarc is a public repository"), acts
         assert only_git(public_checkout) == [".git"]
     acts = world.sync("proj")
     assert any("AGENTS.md" in a for a in acts), acts
@@ -2292,10 +2292,10 @@ def test_a_public_target_receives_no_file_and_its_neighbour_is_unchanged(world, 
 
 def test_adopt_and_check_refuse_a_public_target_the_same_way(world, public):
     _checkout, public_checkout = public
-    dry = world.sync("agentrc", dry=True)
-    adopted = projects.adopt("agentrc", None)
-    assert dry[0].startswith("skip: agentrc is a public repository"), dry
-    assert adopted[0].startswith("adopt: skip: agentrc is a public repository"), adopted
+    dry = world.sync("stratarc", dry=True)
+    adopted = projects.adopt("stratarc", None)
+    assert dry[0].startswith("skip: stratarc is a public repository"), dry
+    assert adopted[0].startswith("adopt: skip: stratarc is a public repository"), adopted
     assert only_git(public_checkout) == [".git"]
 
 
@@ -2306,25 +2306,25 @@ def test_verify_does_not_report_the_public_checkout_as_unregistered_in_a_mixed_t
 def test_a_missing_list_declares_nothing(world, public):
     _checkout, public_checkout = public
     (world.src / "public-targets.json").unlink()
-    world.sync("agentrc")
+    world.sync("stratarc")
     assert (public_checkout / "AGENTS.md").is_file()
 
 
 def test_a_bare_list_is_read_the_same_as_the_targets_object(world, public):
     _checkout, public_checkout = public
-    write(world.src / "public-targets.json", '["agentrc"]\n')
-    assert projects.public_targets() == frozenset({"agentrc"})
-    acts = world.sync("agentrc")
-    assert acts[0].startswith("skip: agentrc is a public repository"), acts
+    write(world.src / "public-targets.json", '["stratarc"]\n')
+    assert projects.public_targets() == frozenset({"stratarc"})
+    acts = world.sync("stratarc")
+    assert acts[0].startswith("skip: stratarc is a public repository"), acts
     assert only_git(public_checkout) == [".git"]
 
 
-@pytest.mark.parametrize("broken", ["{not json", '"agentrc"', '{"targets": "agentrc"}', "[1]"])
+@pytest.mark.parametrize("broken", ["{not json", '"stratarc"', '{"targets": "stratarc"}', "[1]"])
 def test_an_unreadable_list_refuses_before_any_delivery(world, public, broken):
     _checkout, public_checkout = public
     write(world.src / "public-targets.json", broken)
     with pytest.raises(RuntimeError, match="public-targets.json"):
-        world.sync("agentrc")
+        world.sync("stratarc")
     with pytest.raises(RuntimeError, match="public-targets.json"):
         world.sync("proj")
     assert only_git(public_checkout) == [".git"]
@@ -2344,18 +2344,18 @@ def test_the_flag_beats_the_environment_beats_discovery(world, tmp_path, monkeyp
     ambient = tmp_path / "ambient"
     flagged.mkdir()
     ambient.mkdir()
-    monkeypatch.setenv("AGENTRC_SOURCE", str(ambient))
+    monkeypatch.setenv("STRATARC_SOURCE", str(ambient))
     assert projects.source_root(str(flagged)) == flagged
     assert projects.source_root(None) == ambient
-    monkeypatch.setenv("AGENTRC_SOURCE", "")
+    monkeypatch.setenv("STRATARC_SOURCE", "")
     assert projects.source_root(None, flagged) == flagged
 
 
-def test_discovery_finds_the_nearest_agentrc_toml(world, tmp_path, monkeypatch):
+def test_discovery_finds_the_nearest_stratarc_toml(world, tmp_path, monkeypatch):
     tree = tmp_path / "tree"
     write(tree / paths.CONFIG_NAME, "")
     (tree / "deep" / "er").mkdir(parents=True)
-    monkeypatch.delenv("AGENTRC_SOURCE")
+    monkeypatch.delenv("STRATARC_SOURCE")
     monkeypatch.chdir(tree / "deep" / "er")
     assert projects.source_root() == tree.resolve()
 
@@ -2364,7 +2364,7 @@ def test_the_module_never_defaults_to_its_own_location(world, tmp_path, monkeypa
     assert not hasattr(projects, "SCRIPTS")
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    monkeypatch.delenv("AGENTRC_SOURCE")
+    monkeypatch.delenv("STRATARC_SOURCE")
     monkeypatch.chdir(elsewhere)
     assert projects.source_root() == elsewhere.resolve()
 
@@ -2375,7 +2375,7 @@ def test_main_with_the_root_flag_loads_the_control_plane_from_that_tree(world, t
     (flagged / "projects-root").mkdir(parents=True)
     ambient = tmp_path / "ambient"
     ambient.mkdir()
-    monkeypatch.setenv("AGENTRC_SOURCE", str(ambient))
+    monkeypatch.setenv("STRATARC_SOURCE", str(ambient))
     seen = []
 
     class Reached(Exception):
@@ -2397,7 +2397,7 @@ def test_main_resolves_the_root_from_the_environment_on_a_first_run(world, tmp_p
     other = tmp_path / "other"
     (other / "projects-root").mkdir(parents=True)
     monkeypatch.setattr(projects, "_ROOT_CONFIGURED", False)
-    monkeypatch.setenv("AGENTRC_SOURCE", str(other))
+    monkeypatch.setenv("STRATARC_SOURCE", str(other))
     seen = []
 
     class Reached(Exception):

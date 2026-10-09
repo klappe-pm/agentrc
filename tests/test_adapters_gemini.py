@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from agentrc.adapters import gemini  # noqa: E402
-from agentrc.adapters._common import owned_dir_entries  # noqa: E402
+from stratarc.adapters import gemini  # noqa: E402
+from stratarc.adapters._common import owned_dir_entries  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 
@@ -117,7 +117,7 @@ class TestCanonicalPermissions(unittest.TestCase):
             settings = json.loads((tgt_p / "settings.json").read_text())
             self.assertEqual(settings["general"]["defaultApprovalMode"], "auto_edit")
             self.assertTrue(settings["native"])
-            policy = (tgt_p / "policies" / "agentrc-permissions.toml").read_text()
+            policy = (tgt_p / "policies" / "stratarc-permissions.toml").read_text()
             self.assertIn(
                 'commandRegex = "^git\\\\ push\\\\ \\\\-\\\\-force\\\\ .*$', policy
             )

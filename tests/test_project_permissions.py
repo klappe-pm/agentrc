@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import deploy_guard, project_permissions
-from agentrc.permissions import (
+from stratarc import deploy_guard, project_permissions
+from stratarc.permissions import (
     claude_project_permissions,
     codex_approval_policy,
     gemini_approval_mode,
     opencode_permission,
 )
-from agentrc.project_permissions import candidates, projects_dir, refuse_if_stale, short, sweep
+from stratarc.project_permissions import candidates, projects_dir, refuse_if_stale, short, sweep
 
 # The canonical policy written into <source>/permissions.json for every test. Expected values are computed from this dict through the permissions helpers rather than hardcoded, so the tests track the renderer instead of duplicating it.
 POLICY = json.loads((Path(__file__).resolve().parent / "fixtures" / "project_permissions" / "permissions.json").read_text(encoding="utf-8"))
@@ -42,7 +42,7 @@ def read_json(path: Path):
 
 
 @pytest.fixture
-def source(tmp_path: Path, agentrc_home: Path) -> Path:
+def source(tmp_path: Path, stratarc_home: Path) -> Path:
     path = tmp_path.resolve() / "source-root"
     write_json(path / "permissions.json", POLICY)
     return path
@@ -481,15 +481,15 @@ class TestPublicTargets:
 
 
 class TestProjectsDirectory:
-    """The default root the sweep walks is $LLM_ROOT_PROJECTS_DIR when set, then agentrc.toml, then ~/projects, read when called."""
+    """The default root the sweep walks is $LLM_ROOT_PROJECTS_DIR when set, then stratarc.toml, then ~/projects, read when called."""
 
     def test_it_is_read_from_the_environment(self, source, tmp_path, monkeypatch):
         monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(tmp_path / "elsewhere"))
         assert projects_dir(source) == tmp_path / "elsewhere"
 
-    def test_it_defaults_to_projects_under_the_agentrc_home(self, source, agentrc_home, monkeypatch):
+    def test_it_defaults_to_projects_under_the_stratarc_home(self, source, stratarc_home, monkeypatch):
         monkeypatch.delenv("LLM_ROOT_PROJECTS_DIR", raising=False)
-        assert projects_dir(source) == agentrc_home / "projects"
+        assert projects_dir(source) == stratarc_home / "projects"
 
     def test_a_sweep_with_no_root_walks_the_projects_directory(self, source, tmp_path, monkeypatch):
         walked = tmp_path / "walked"
@@ -501,8 +501,8 @@ class TestProjectsDirectory:
 
 
 class TestShort:
-    def test_the_home_prefix_becomes_a_tilde(self, agentrc_home):
-        assert short(agentrc_home / "projects" / "demo") == "~/projects/demo"
+    def test_the_home_prefix_becomes_a_tilde(self, stratarc_home):
+        assert short(stratarc_home / "projects" / "demo") == "~/projects/demo"
 
 
 class TestRefuseIfStale:
@@ -536,8 +536,8 @@ class TestRefuseIfStale:
         self._write_policy(source, 4)
         assert refuse_if_stale(source, target) is None
 
-    def test_the_default_target_is_the_claude_directory_under_the_home(self, source, agentrc_home):
-        deploy_guard.write_stamp(agentrc_home / ".claude", 7, Path("/checkouts/newer"))
+    def test_the_default_target_is_the_claude_directory_under_the_home(self, source, stratarc_home):
+        deploy_guard.write_stamp(stratarc_home / ".claude", 7, Path("/checkouts/newer"))
         self._write_policy(source, 1)
         assert "version 7" in refuse_if_stale(source)
 
@@ -566,14 +566,14 @@ class TestMain:
         assert read_json(settings_path)["permissions"] == claude_project_permissions(POLICY)
 
     def test_the_source_root_comes_from_the_environment_when_no_flag_is_given(self, source, root, monkeypatch, capsys):
-        monkeypatch.setenv("AGENTRC_SOURCE", str(source))
+        monkeypatch.setenv("STRATARC_SOURCE", str(source))
         monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(root))
         write_json(root / "proj" / ".claude" / "settings.json", {"permissions": {"allow": ["Bash(old *)"]}})
 
         assert project_permissions.main(["--check"]) == 1
 
-    def test_a_stale_source_exits_two_and_writes_nothing(self, source, root, agentrc_home, capsys):
-        deploy_guard.write_stamp(agentrc_home / ".claude", 9, Path("/checkouts/newer"))
+    def test_a_stale_source_exits_two_and_writes_nothing(self, source, root, stratarc_home, capsys):
+        deploy_guard.write_stamp(stratarc_home / ".claude", 9, Path("/checkouts/newer"))
         settings_path = root / "proj" / ".claude" / "settings.json"
         original = json.dumps({"permissions": {"allow": ["Bash(old *)"]}}, indent=2) + "\n"
         write_text(settings_path, original)

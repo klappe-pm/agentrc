@@ -1,4 +1,4 @@
-"""Tests for the service and port check and the service installer in agentrc.components.
+"""Tests for the service and port check and the service installer in stratarc.components.
 
 A declared service names its launchd label, its port and its plist; a known competitor is declared wanted: false with the match that finds it and the line that removes it. The check compares the process listening on each declared port with the owner's pid from launchctl print and names any other holder, with its removal line when it is a declared competitor. The installer copies the declared plist into a LaunchAgents directory and bootstraps it; it never stops a competitor.
 
@@ -19,7 +19,7 @@ from unittest import mock
 
 import pytest
 
-from agentrc import components
+from stratarc import components
 
 UID = 501
 OWNER_LABEL = "com.example.embeddings"
@@ -35,8 +35,8 @@ ENV_VALUE = "fixture-environment-value-never-printed"
 
 
 @pytest.fixture
-def run_env(repo_root, agentrc_home):
-    """The environment for a subprocess that imports the checkout's agentrc."""
+def run_env(repo_root, stratarc_home):
+    """The environment for a subprocess that imports the checkout's stratarc."""
     env = dict(os.environ)
     env["PYTHONPATH"] = str(repo_root)
     return env
@@ -700,7 +700,7 @@ class TestInstallService:
 
 
 class TestCommandLine:
-    """agentrc.components --services and --install-service against stubbed launchctl, lsof and ps and a fixture LaunchAgents directory."""
+    """stratarc.components --services and --install-service against stubbed launchctl, lsof and ps and a fixture LaunchAgents directory."""
 
     @pytest.fixture(autouse=True)
     def workspace(self, tmp_path, run_env):
@@ -713,7 +713,7 @@ class TestCommandLine:
         path = self.base / "components.json"
         path.write_text(json.dumps(document))
         return subprocess.run(
-            [sys.executable, "-m", "agentrc.components", "--manifest", str(path), *args],
+            [sys.executable, "-m", "stratarc.components", "--manifest", str(path), *args],
             capture_output=True,
             text=True,
             timeout=60,
@@ -840,7 +840,7 @@ class TestInstallOffTheMac:
 
 
 class TestInstallWorkerCommandLine:
-    """agentrc.components --install-service worker against a fixture manifest and a fixture plist under a temporary root (--root)."""
+    """stratarc.components --install-service worker against a fixture manifest and a fixture plist under a temporary root (--root)."""
 
     @pytest.fixture(autouse=True)
     def workspace(self, tmp_path, run_env):
@@ -855,7 +855,7 @@ class TestInstallWorkerCommandLine:
     def run_install(self, *args):
         return subprocess.run(
             [
-                sys.executable, "-m", "agentrc.components", "--manifest", str(self.manifest), "--root", str(self.root),
+                sys.executable, "-m", "stratarc.components", "--manifest", str(self.manifest), "--root", str(self.root),
                 "--install-service", "worker", "--launch-agents-dir", str(self.agents), *args,
             ],
             capture_output=True,

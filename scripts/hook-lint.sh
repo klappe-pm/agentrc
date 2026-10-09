@@ -4,7 +4,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hooks_dir="$(cd "$script_dir/.." && pwd)/agentrc/data/hooks"
+hooks_dir="$(cd "$script_dir/.." && pwd)/stratarc/data/hooks"
 tests_dir="$(cd "$script_dir/.." && pwd)/tests/hooks"
 strict=0
 

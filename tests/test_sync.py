@@ -1,6 +1,6 @@
 """Tests for the sync orchestrator: failure propagation, the deploy guard, the diff mode, the --check reverse pass and --prune.
 
-Every tree here is a temporary fixture and every home is a temporary directory reached through AGENTRC_HOME. The steps a full run delegates (the reconciler, the project delivery, the permission sweep) are replaced where a test is about the orchestration rather than about them; the end to end tests at the bottom run them for real.
+Every tree here is a temporary fixture and every home is a temporary directory reached through STRATARC_HOME. The steps a full run delegates (the reconciler, the project delivery, the permission sweep) are replaced where a test is about the orchestration rather than about them; the end to end tests at the bottom run them for real.
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import sync
-from agentrc.adapters._common import runtime_registry
+from stratarc import sync
+from stratarc.adapters._common import runtime_registry
 from tests.conftest import REPO_ROOT, tree_snapshot
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -30,11 +30,11 @@ REGISTRY_FIXTURE = FIXTURES / "adapters" / "registry"
 
 
 @pytest.fixture(autouse=True)
-def isolated_environment(agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Every test reads the home through AGENTRC_HOME and starts with no environment selected."""
-    for name in ("AGENTRC_ENVIRONMENT", "AGENTRC_SOURCE", "LLM_ROOT_PROJECTS_DIR"):
+def isolated_environment(stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Every test reads the home through STRATARC_HOME and starts with no environment selected."""
+    for name in ("STRATARC_ENVIRONMENT", "STRATARC_SOURCE", "LLM_ROOT_PROJECTS_DIR"):
         monkeypatch.delenv(name, raising=False)
-    return agentrc_home
+    return stratarc_home
 
 
 def git(root: Path, *args: str) -> str:
@@ -74,7 +74,7 @@ def run_main(*argv: str) -> tuple[int, str, str]:
 
 class TestRegenerateDerived:
     def stub_digest(self, monkeypatch: pytest.MonkeyPatch, code: int = 0, out: str = "refreshed", err: str = "") -> list[list[str]]:
-        from agentrc import gen_rules_digest
+        from stratarc import gen_rules_digest
 
         calls: list[list[str]] = []
 
@@ -102,7 +102,7 @@ class TestRegenerateDerived:
             sync.regenerate_derived(tmp_path)
 
     def test_a_system_exit_from_the_digest_is_a_failure_not_a_crash(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from agentrc import gen_rules_digest
+        from stratarc import gen_rules_digest
 
         def main(argv):
             raise SystemExit(2)
@@ -145,8 +145,8 @@ class TestRegenerateDerived:
         assert sync.regenerate_derived(root)[0].startswith("rules digest:")
         agents = (root / "AGENTS.md").read_text(encoding="utf-8")
         claude = (root / "CLAUDE.md").read_text(encoding="utf-8")
-        assert "${AGENTRC_SOURCE}" in agents
-        assert "${AGENTRC_SOURCE}" not in claude
+        assert "${STRATARC_SOURCE}" in agents
+        assert "${STRATARC_SOURCE}" not in claude
         assert str(root) in claude
 
     def test_a_second_run_changes_nothing(self, tmp_path: Path) -> None:
@@ -208,7 +208,7 @@ class TestRefuseOnInvalidSource:
     def test_the_private_checks_do_not_gate_a_deploy(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         (tmp_path / "scripts" / "private").mkdir(parents=True)
         (tmp_path / "scripts" / "private" / "validate_checks.py").write_text(
-            "from agentrc.validate import finding\n\n\ndef check_always(root):\n    return [finding('error', 'always', 'x', 'fails every run')]\n\n\nVALIDATE_CHECKS = [check_always]\n"
+            "from stratarc.validate import finding\n\n\ndef check_always(root):\n    return [finding('error', 'always', 'x', 'fails every run')]\n\n\nVALIDATE_CHECKS = [check_always]\n"
         )
         assert sync.refuse_on_invalid_source(tmp_path) is None
         assert "always" not in capsys.readouterr().out
@@ -244,9 +244,9 @@ def stub_steps(
 
     git stays real, so the deploy guard and the deploy record read the fixture checkout.
     """
-    from agentrc import deploy_guard, permissions, project_permissions, staging
-    from agentrc.adapters import _components
-    from agentrc.control_plane import ControlPlane
+    from stratarc import deploy_guard, permissions, project_permissions, staging
+    from stratarc.adapters import _components
+    from stratarc.control_plane import ControlPlane
 
     steps = Steps()
     runtimes: dict = {}
@@ -260,7 +260,7 @@ def stub_steps(
     def record(name):
         def run(root, *args, **kwargs):
             steps.calls.append((name, root, *args))
-            steps.seen.setdefault("source_variable", os.environ.get("AGENTRC_SOURCE"))
+            steps.seen.setdefault("source_variable", os.environ.get("STRATARC_SOURCE"))
             return 0
 
         return run
@@ -303,7 +303,7 @@ def stub_steps(
 
 
 class TestSourceRoot:
-    """The source root is --root, then AGENTRC_SOURCE, then agentrc.toml, then the current directory; every step sees the resolved root."""
+    """The source root is --root, then STRATARC_SOURCE, then stratarc.toml, then the current directory; every step sees the resolved root."""
 
     def committed_source(self, tmp_path: Path) -> Path:
         root = (tmp_path / "source").resolve()
@@ -321,53 +321,53 @@ class TestSourceRoot:
         assert [call[1] for call in steps.calls] == [root, root, root]
         assert steps.seen["source_variable"] == str(root)
 
-    def test_the_flag_stages_from_that_tree(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_the_flag_stages_from_that_tree(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = self.committed_source(tmp_path)
-        steps = stub_steps(monkeypatch, agentrc_home)
+        steps = stub_steps(monkeypatch, stratarc_home)
         code, _out, err = run_main("--root", str(root))
         assert code == 0, err
         self.assert_staged_from(steps, root)
 
-    def test_the_environment_variable_stages_from_that_tree(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_the_environment_variable_stages_from_that_tree(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = self.committed_source(tmp_path)
-        monkeypatch.setenv("AGENTRC_SOURCE", str(root))
-        steps = stub_steps(monkeypatch, agentrc_home)
+        monkeypatch.setenv("STRATARC_SOURCE", str(root))
+        steps = stub_steps(monkeypatch, stratarc_home)
         code, _out, err = run_main()
         assert code == 0, err
         self.assert_staged_from(steps, root)
 
-    def test_the_nearest_agentrc_toml_names_the_root_when_nothing_else_does(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_the_nearest_stratarc_toml_names_the_root_when_nothing_else_does(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = self.committed_source(tmp_path)
-        (root / "agentrc.toml").write_text('name = "agentrc"\n')
+        (root / "stratarc.toml").write_text('name = "stratarc"\n')
         commit(root, "configure")
         (root / "rules" / "nested").mkdir()
         monkeypatch.chdir(root / "rules" / "nested")
-        steps = stub_steps(monkeypatch, agentrc_home)
+        steps = stub_steps(monkeypatch, stratarc_home)
         code, _out, err = run_main()
         assert code == 0, err
         self.assert_staged_from(steps, root)
 
-    def test_the_flag_wins_over_the_environment(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_the_flag_wins_over_the_environment(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = self.committed_source(tmp_path)
-        monkeypatch.setenv("AGENTRC_SOURCE", str(tmp_path / "elsewhere"))
-        steps = stub_steps(monkeypatch, agentrc_home)
+        monkeypatch.setenv("STRATARC_SOURCE", str(tmp_path / "elsewhere"))
+        steps = stub_steps(monkeypatch, stratarc_home)
         assert run_main("--root", str(root))[0] == 0
         self.assert_staged_from(steps, root)
 
-    def test_the_variable_is_restored_after_a_run(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_the_variable_is_restored_after_a_run(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = self.committed_source(tmp_path)
-        stub_steps(monkeypatch, agentrc_home)
-        monkeypatch.delenv("AGENTRC_SOURCE", raising=False)
+        stub_steps(monkeypatch, stratarc_home)
+        monkeypatch.delenv("STRATARC_SOURCE", raising=False)
         run_main("--root", str(root))
-        assert "AGENTRC_SOURCE" not in os.environ
-        monkeypatch.setenv("AGENTRC_SOURCE", "/previous/value")
+        assert "STRATARC_SOURCE" not in os.environ
+        monkeypatch.setenv("STRATARC_SOURCE", "/previous/value")
         run_main("--root", str(root))
-        assert os.environ["AGENTRC_SOURCE"] == "/previous/value"
+        assert os.environ["STRATARC_SOURCE"] == "/previous/value"
 
     def test_the_child_environment_names_the_resolved_root(self, tmp_path: Path) -> None:
         env = sync.child_environment(tmp_path)
-        assert env["AGENTRC_SOURCE"] == str(tmp_path)
-        others = lambda mapping: {k: v for k, v in mapping.items() if k not in ("AGENTRC_SOURCE", "PYTHONPATH")}  # noqa: E731
+        assert env["STRATARC_SOURCE"] == str(tmp_path)
+        others = lambda mapping: {k: v for k, v in mapping.items() if k not in ("STRATARC_SOURCE", "PYTHONPATH")}  # noqa: E731
         assert others(env) == others(os.environ)
 
     def test_the_child_runs_the_engine_that_is_running(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -376,7 +376,7 @@ class TestSourceRoot:
         assert Path(first) == REPO_ROOT
         assert rest == "/existing/path"
         child = subprocess.run(
-            [sys.executable, "-c", "import agentrc, sys; print(agentrc.__file__)"],
+            [sys.executable, "-c", "import stratarc, sys; print(stratarc.__file__)"],
             capture_output=True,
             text=True,
             cwd=tmp_path,
@@ -388,22 +388,22 @@ class TestSourceRoot:
 class TestMainRefusesInvalidSourceFirst:
     """An invalid tree is refused before any target write, and the reconciler, which writes control-plane.md, is a target write."""
 
-    def test_main_returns_the_refusal_and_nothing_else_runs(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_main_returns_the_refusal_and_nothing_else_runs(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = tmp_path / "source"
         (root / "rules").mkdir(parents=True)
         (root / "rules" / "style.md").write_text('paths:\n  - "**/*.sh"\n\n# style\n\nBody.\n')
-        steps = stub_steps(monkeypatch, agentrc_home)
+        steps = stub_steps(monkeypatch, stratarc_home)
         monkeypatch.setattr(sync, "refuse_on_invalid_source", _real_refuse)
         code, _out, err = run_main("--root", str(root))
         assert code != 0
         assert "refusing to deploy" in err
         assert steps.calls == []
 
-    def test_the_gate_also_runs_for_check_and_diff(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_the_gate_also_runs_for_check_and_diff(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = tmp_path / "source"
         (root / "rules").mkdir(parents=True)
         (root / "rules" / "style.md").write_text('paths:\n  - "**/*.sh"\n\n# style\n\nBody.\n')
-        steps = stub_steps(monkeypatch, agentrc_home)
+        steps = stub_steps(monkeypatch, stratarc_home)
         monkeypatch.setattr(sync, "refuse_on_invalid_source", _real_refuse)
         for flag in ("--check", "--diff"):
             code, _out, err = run_main("--root", str(root), flag)
@@ -417,9 +417,9 @@ _real_refuse = sync.refuse_on_invalid_source
 class TestMainTreatsARefusedRenderAsAFailure:
     """A component render that refuses (a config the adapter cannot safely rewrite) must fail the run, name the runtime and leave the target unstamped, while the other runtimes still sync."""
 
-    def test_a_refused_render_exits_2_and_is_not_stamped(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from agentrc import deploy_guard
-        from agentrc.adapters._components import RenderRefused
+    def test_a_refused_render_exits_2_and_is_not_stamped(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from stratarc import deploy_guard
+        from stratarc.adapters._components import RenderRefused
 
         def refuse(source, target, dry_run=False):
             raise RenderRefused("config.toml defines mcp_servers.demo in a shape this adapter cannot replace; edit it by hand")
@@ -431,7 +431,7 @@ class TestMainTreatsARefusedRenderAsAFailure:
         monkeypatch.setitem(sys.modules, "wi_refusing_adapter", refusing)
         monkeypatch.setitem(sys.modules, "wi_working_adapter", working)
         stamped: list[str] = []
-        stub_steps(monkeypatch, agentrc_home, runtime=None)
+        stub_steps(monkeypatch, stratarc_home, runtime=None)
         live = {"refusing": ("wi_refusing_adapter", tmp_path / ".refusing"), "working": ("wi_working_adapter", tmp_path / ".working")}
         monkeypatch.setattr(sync, "load_runtimes", lambda *a, **k: dict(live))
         monkeypatch.setattr(sync, "detected", lambda runtimes_=None: dict(live))
@@ -489,9 +489,9 @@ class TestDeployGuard:
         if branch:
             subprocess.run(["git", "-C", str(root), "switch", "-q", branch], check=True, capture_output=True)
         if environment:
-            monkeypatch.setenv("AGENTRC_ENVIRONMENT", environment)
+            monkeypatch.setenv("STRATARC_ENVIRONMENT", environment)
         else:
-            monkeypatch.delenv("AGENTRC_ENVIRONMENT", raising=False)
+            monkeypatch.delenv("STRATARC_ENVIRONMENT", raising=False)
 
         def regenerate(root_=None):
             if derived_change or derived_commit:
@@ -505,15 +505,15 @@ class TestDeployGuard:
         return code, err
 
     def record(self, home: Path, root: Path) -> dict | None:
-        from agentrc import deploy_guard
+        from stratarc import deploy_guard
 
         return deploy_guard.read_deploy_record(home, root)
 
     @pytest.fixture
-    def layout(self, tmp_path: Path, agentrc_home: Path) -> tuple[Path, Path]:
+    def layout(self, tmp_path: Path, stratarc_home: Path) -> tuple[Path, Path]:
         root = tmp_path / "root"
         root.mkdir()
-        return root, agentrc_home
+        return root, stratarc_home
 
     def test_the_workstation_refuses_main_and_records_nothing(self, layout, monkeypatch) -> None:
         root, home = layout
@@ -730,7 +730,7 @@ class TestHookEventMaps:
 
     def test_the_packaged_hooks_registry_leaves_no_runtime_a_gap(self) -> None:
         """Every adapter declares each event of the packaged guard registry that it delivers or deliberately drops."""
-        from agentrc.resources import data_dir
+        from stratarc.resources import data_dir
 
         # The package data directory has the layout of a stage: hooks/hooks.json under it.
         stage = Path(str(data_dir("")))
@@ -747,25 +747,25 @@ class TestHookEventMaps:
 class TestRuntimeRegistry:
     """The sync reads the adapters' runtime registry instead of keeping its own tables."""
 
-    def test_runtimes_hook_maps_and_registries_are_the_registry(self, agentrc_home: Path) -> None:
+    def test_runtimes_hook_maps_and_registries_are_the_registry(self, stratarc_home: Path) -> None:
         registry = runtime_registry()
-        assert sync.load_runtimes() == {name: (r.module, r.target(agentrc_home)) for name, r in registry.items()}
+        assert sync.load_runtimes() == {name: (r.module, r.target(stratarc_home)) for name, r in registry.items()}
         assert sync.hook_event_maps() == {name: set(r.hook_events) for name, r in registry.items()}
         assert sync.hook_registries() == {name: r.hook_registry for name, r in registry.items() if r.hook_registry}
 
     def test_modules_are_dotted_and_importable(self) -> None:
         for name, (module, _target) in sync.load_runtimes().items():
-            assert module == f"agentrc.adapters.{name}"
+            assert module == f"stratarc.adapters.{name}"
             importlib.import_module(module)
 
     def test_the_home_is_read_when_called_not_at_import(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         other = tmp_path / "other-home"
-        monkeypatch.setenv("AGENTRC_HOME", str(other))
+        monkeypatch.setenv("STRATARC_HOME", str(other))
         assert sync.load_runtimes()["claude"][1] == other / ".claude"
         assert sync.short(other / ".claude") == "~/.claude"
 
     def test_a_sixth_adapter_is_accepted_without_other_edits(self, tmp_path: Path) -> None:
-        adapters = REPO_ROOT / "agentrc" / "adapters"
+        adapters = REPO_ROOT / "stratarc" / "adapters"
         fixture = tmp_path / "adapters"
         fixture.mkdir()
         for path in adapters.glob("*.py"):
@@ -777,33 +777,33 @@ class TestRuntimeRegistry:
         stage = tmp_path / "stage"
         (stage / "hooks").mkdir(parents=True)
         (stage / "hooks" / "hooks.json").write_text(json.dumps({event: [] for event in ("PreToolUse", "PostToolUse", "Stop", "UserPromptSubmit", "SessionStart")}))
-        assert runtimes["sixth"] == ("agentrc.adapters.sixth", home / ".sixth")
+        assert runtimes["sixth"] == ("stratarc.adapters.sixth", home / ".sixth")
         assert len(runtimes) == 6
         assert sync.unmapped_hook_events(stage, "sixth", maps) == set()
 
 
 class TestRuntimeConfiguration:
-    """A [runtimes.<name>] table in agentrc.toml turns a runtime off or moves its target."""
+    """A [runtimes.<name>] table in stratarc.toml turns a runtime off or moves its target."""
 
-    def plain(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    def plain(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         root = fixture_source(tmp_path)
         for name in (".claude", ".codex"):
-            (agentrc_home / name).mkdir()
+            (stratarc_home / name).mkdir()
         return root
 
-    def test_a_target_in_the_table_replaces_the_default(self, tmp_path: Path, agentrc_home: Path) -> None:
+    def test_a_target_in_the_table_replaces_the_default(self, tmp_path: Path, stratarc_home: Path) -> None:
         root = fixture_source(tmp_path)
-        (root / "agentrc.toml").write_text('[runtimes.claude]\nenabled = true\ntarget = "~/elsewhere/claude"\n')
+        (root / "stratarc.toml").write_text('[runtimes.claude]\nenabled = true\ntarget = "~/elsewhere/claude"\n')
         runtimes = sync.load_runtimes(root=root)
-        assert runtimes["claude"][1] == agentrc_home / "elsewhere" / "claude"
-        assert runtimes["codex"][1] == agentrc_home / ".codex"
+        assert runtimes["claude"][1] == stratarc_home / "elsewhere" / "claude"
+        assert runtimes["codex"][1] == stratarc_home / ".codex"
 
-    def test_a_disabled_runtime_is_not_synced(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        root = self.plain(tmp_path, agentrc_home, monkeypatch)
-        (root / "agentrc.toml").write_text("[runtimes.codex]\nenabled = false\n")
+    def test_a_disabled_runtime_is_not_synced(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        root = self.plain(tmp_path, stratarc_home, monkeypatch)
+        (root / "stratarc.toml").write_text("[runtimes.codex]\nenabled = false\n")
         called: list[str] = []
-        stub_steps(monkeypatch, agentrc_home, runtime=None)
-        live = {name: (f"stub_{name}", agentrc_home / f".{name}") for name in ("claude", "codex")}
+        stub_steps(monkeypatch, stratarc_home, runtime=None)
+        live = {name: (f"stub_{name}", stratarc_home / f".{name}") for name in ("claude", "codex")}
         for name in live:
             adapter = types.ModuleType(f"stub_{name}")
             adapter.sync = lambda source, target, dry_run=False, environment=None, _name=name: called.append(_name) or []
@@ -814,17 +814,17 @@ class TestRuntimeConfiguration:
         assert code == 0, err
         assert called == ["claude"]
 
-    def test_a_malformed_table_is_a_refusal(self, tmp_path: Path, agentrc_home: Path) -> None:
+    def test_a_malformed_table_is_a_refusal(self, tmp_path: Path, stratarc_home: Path) -> None:
         root = fixture_source(tmp_path)
-        (root / "agentrc.toml").write_text('[runtimes.claude]\nenabled = "yes"\n')
+        (root / "stratarc.toml").write_text('[runtimes.claude]\nenabled = "yes"\n')
         code, _out, err = run_main("--root", str(root), "--list")
         assert code == 2
-        assert "agentrc.toml" in err
+        assert "stratarc.toml" in err
 
 
 class TestRunMainOptions:
-    def test_list_names_every_runtime_and_whether_it_is_installed(self, agentrc_home: Path, tmp_path: Path) -> None:
-        (agentrc_home / ".claude").mkdir()
+    def test_list_names_every_runtime_and_whether_it_is_installed(self, stratarc_home: Path, tmp_path: Path) -> None:
+        (stratarc_home / ".claude").mkdir()
         code, out, _err = run_main("--root", str(tmp_path), "--list")
         assert code == 0
         lines = {line.split()[0]: line for line in out.splitlines()}
@@ -886,7 +886,7 @@ def by_kind(findings: list) -> dict[str, list]:
 
 
 def live_for(name: str, target: Path) -> dict:
-    return {name: (f"agentrc.adapters.{name}", target)}
+    return {name: (f"stratarc.adapters.{name}", target)}
 
 
 class TestReversePassPerAdapter:
@@ -1025,7 +1025,7 @@ class TestReversePassPerAdapter:
             assert absent not in grouped
 
     def test_an_adapter_that_cannot_be_imported_yields_no_findings(self, root: Path, stage: Path) -> None:
-        live = {"ghost": ("agentrc.adapters.ghost", root / ".ghost")}
+        live = {"ghost": ("stratarc.adapters.ghost", root / ".ghost")}
         assert sync.reverse_pass(root, stage, live) == {"ghost": []}
 
 
@@ -1085,12 +1085,12 @@ class TestRunPrune:
     """--prune deletes orphan, retired and dangling; nothing else."""
 
     @pytest.fixture
-    def layout(self, tmp_path: Path, agentrc_home: Path):
+    def layout(self, tmp_path: Path, stratarc_home: Path):
         # run_prune builds its own stage from the root through the control plane and staging, gated by control-plane.md; with none present that stage is empty, so everything present in the target reads as an orphan. That is what these fixtures want: the deletion mechanics, not the classification the per-adapter tests already cover.
         root = tmp_path / "source"
         (root / "rules").mkdir(parents=True)
         (root / "rules" / "retired.json").write_text(json.dumps({"retired": ["retired-rule.md"]}) + "\n")
-        target = agentrc_home / ".claude"
+        target = stratarc_home / ".claude"
         (target / "rules").mkdir(parents=True)
         (target / "rules" / "stale-rule.md").write_text("stale\n")
         (target / "rules" / "retired-rule.md").write_text("retired\n")
@@ -1106,7 +1106,7 @@ class TestRunPrune:
             ]
         }
         (target / "settings.json").write_text(json.dumps({"hooks": hooks, "theme": "dark"}) + "\n")
-        return root, target, live_for("claude", target), agentrc_home
+        return root, target, live_for("claude", target), stratarc_home
 
     def prune(self, root: Path, live: dict, *, dry_run: bool) -> tuple[int, str]:
         out = io.StringIO()
@@ -1155,16 +1155,16 @@ class TestRunPrune:
         for name in ("retired-rule.md", "missing-script.sh", "second-stale-rule.md"):
             assert name in text
 
-    def test_nothing_to_delete_is_reported_and_writes_no_telemetry(self, tmp_path: Path, agentrc_home: Path) -> None:
+    def test_nothing_to_delete_is_reported_and_writes_no_telemetry(self, tmp_path: Path, stratarc_home: Path) -> None:
         root = tmp_path / "empty"
         root.mkdir()
         (root / "control-plane.md").write_text("")
-        target = agentrc_home / ".claude"
+        target = stratarc_home / ".claude"
         target.mkdir(parents=True)
         code, printed = self.prune(root, live_for("claude", target), dry_run=False)
         assert code == 0
         assert "nothing to delete" in printed
-        assert not (agentrc_home / ".agent-hooks").exists()
+        assert not (stratarc_home / ".agent-hooks").exists()
 
     def test_the_main_entry_point_reaches_prune_with_dry_run(self, layout, monkeypatch: pytest.MonkeyPatch) -> None:
         root, target, live, home = layout
@@ -1186,12 +1186,12 @@ class TestExternalInventory:
     VENDOR = "vendor-tool"
 
     @pytest.fixture
-    def layout(self, tmp_path: Path, agentrc_home: Path, monkeypatch: pytest.MonkeyPatch):
-        from agentrc import staging
+    def layout(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch):
+        from stratarc import staging
 
         root = tmp_path / "source"
         root.mkdir()
-        home = agentrc_home
+        home = stratarc_home
         stage = build_stage(root)
         target = home / ".claude"
         literal = "sk-" + "b" * 40
@@ -1201,7 +1201,7 @@ class TestExternalInventory:
                 {
                     "version": 1,
                     "mcp_servers": [
-                        {"name": "docs-server", "runtimes": ["claude"], "owner": "agentrc", "wanted": True, "command": "npx"},
+                        {"name": "docs-server", "runtimes": ["claude"], "owner": "stratarc", "wanted": True, "command": "npx"},
                         {"name": "old-server", "runtimes": ["claude"], "owner": "old-installer", "wanted": False, "command": "x"},
                     ],
                     "foreign_hooks": [
@@ -1228,7 +1228,7 @@ class TestExternalInventory:
                         {
                             "name": "never-installed-tool",
                             "runtimes": ["claude"],
-                            "owner": "agentrc",
+                            "owner": "stratarc",
                             "wanted": True,
                             "command": "never-installed-tool-fixture",
                             "install": "packager install never-installed-tool",
@@ -1432,16 +1432,16 @@ class TestForeignToolsAreDeclared:
     SKILLS = ("reviewbot-review", "reviewbot-fix")
 
     @pytest.fixture
-    def layout(self, tmp_path: Path, agentrc_home: Path):
-        from agentrc import staging
+    def layout(self, tmp_path: Path, stratarc_home: Path):
+        from stratarc import staging
 
         root = tmp_path / "source"
         shutil.copytree(FOREIGN, root)
         (root / "skills" / "kept-skill").mkdir(parents=True)
         (root / "skills" / "kept-skill" / "SKILL.md").write_text("---\nname: kept-skill\n---\nBody.\n")
         stage, _notes = staging.build_stage(root, OneSkillPlane(), "global")
-        live = {name: (runtime.module, runtime.target(agentrc_home)) for name, runtime in runtime_registry().items() if name in self.RUNTIMES}
-        yield types.SimpleNamespace(root=root, stage=stage, live=live, home=agentrc_home)
+        live = {name: (runtime.module, runtime.target(stratarc_home)) for name, runtime in runtime_registry().items() if name in self.RUNTIMES}
+        yield types.SimpleNamespace(root=root, stage=stage, live=live, home=stratarc_home)
         staging.cleanup_all()
 
     def findings(self, layout) -> dict:
@@ -1507,7 +1507,7 @@ class TestForeignToolsAreDeclared:
 
     def test_cursor_keeps_no_skills_directory_so_its_copies_are_never_seen(self, layout) -> None:
         # Recorded, not fixed: giving Cursor a per-item skill OwnedDir would make every other directory under ~/.cursor/skills an orphan that --prune deletes, which is a change to Cursor's ownership.
-        from agentrc.adapters import cursor
+        from stratarc.adapters import cursor
 
         owned = {directory.kind for directory in cursor.owned_outputs(layout.stage, layout.home / ".cursor")}
         assert "skill" not in owned
@@ -1522,10 +1522,10 @@ class TestDiff:
     """--diff (and --dry-run alone) stages the source, runs every adapter in check mode, prints what would change, writes nothing anywhere and exits 0."""
 
     @pytest.fixture
-    def layout(self, tmp_path: Path, agentrc_home: Path):
+    def layout(self, tmp_path: Path, stratarc_home: Path):
         source = fixture_source(tmp_path)
-        (agentrc_home / ".claude").mkdir()
-        return source, agentrc_home
+        (stratarc_home / ".claude").mkdir()
+        return source, stratarc_home
 
     @pytest.mark.parametrize("flags", [("--diff",), ("--dry-run",)])
     def test_a_diff_writes_nothing_and_exits_zero(self, layout, flags) -> None:
@@ -1629,7 +1629,7 @@ class TestDiff:
 
 
 class TestSyncRunTouchesOnlyTheRedirectedHome:
-    """With AGENTRC_HOME naming a fixture home and HOME naming a decoy, a whole `python -m agentrc.sync` run (the children included) reads and writes under the fixture and nothing under HOME. The apply run is the discriminating one: a sync that ignored AGENTRC_HOME would write runtime output into the decoy and leave the fixture home empty."""
+    """With STRATARC_HOME naming a fixture home and HOME naming a decoy, a whole `python -m stratarc.sync` run (the children included) reads and writes under the fixture and nothing under HOME. The apply run is the discriminating one: a sync that ignored STRATARC_HOME would write runtime output into the decoy and leave the fixture home empty."""
 
     @pytest.fixture
     def layout(self, tmp_path: Path):
@@ -1638,8 +1638,8 @@ class TestSyncRunTouchesOnlyTheRedirectedHome:
         source, home, decoy = base / "source", base / "fixture-home", base / "decoy-home"
         shutil.copytree(SYNC_SOURCE, source)
         home.mkdir()
-        environment = {key: value for key, value in os.environ.items() if key not in {"AGENTRC_SOURCE", "LLM_ROOT_PROJECTS_DIR", "AGENTRC_ENVIRONMENT"} and not key.startswith("GIT_")}
-        environment.update(HOME=str(decoy), AGENTRC_HOME=str(home), PYTHONPATH=str(REPO_ROOT))
+        environment = {key: value for key, value in os.environ.items() if key not in {"STRATARC_SOURCE", "LLM_ROOT_PROJECTS_DIR", "STRATARC_ENVIRONMENT"} and not key.startswith("GIT_")}
+        environment.update(HOME=str(decoy), STRATARC_HOME=str(home), PYTHONPATH=str(REPO_ROOT))
         # The decoy stands for the real home: a runtime directory and a projects tree that a stray default would walk or rewrite.
         (decoy / ".claude").mkdir(parents=True)
         (decoy / ".claude" / "settings.json").write_text('{"decoy": true}\n')
@@ -1651,7 +1651,7 @@ class TestSyncRunTouchesOnlyTheRedirectedHome:
 
     def run(self, base: Path, source: Path, environment: dict, *flags: str):
         return subprocess.run(
-            [sys.executable, "-m", "agentrc.sync", *flags, "--root", str(source)],
+            [sys.executable, "-m", "stratarc.sync", *flags, "--root", str(source)],
             capture_output=True,
             text=True,
             cwd=base,
@@ -1684,8 +1684,8 @@ class TestSyncRunTouchesOnlyTheRedirectedHome:
         assert result.returncode == 0, result.stdout + result.stderr
         # The redirect is proved: runtime output and the deploy stamp landed under the fixture home.
         assert [path for path in (home / ".claude").rglob("*") if path.is_file()], result.stdout + result.stderr
-        assert (home / ".claude" / ".agentrc-deploy.json").is_file()
-        # The decoy, which a sync ignoring AGENTRC_HOME would have deployed into, is byte-identical.
+        assert (home / ".claude" / ".stratarc-deploy.json").is_file()
+        # The decoy, which a sync ignoring STRATARC_HOME would have deployed into, is byte-identical.
         assert tree_snapshot(decoy) == decoy_before
         assert {path.name for path in base.iterdir()} == {"source", "fixture-home", "decoy-home"}
         # A second run finds nothing to do.

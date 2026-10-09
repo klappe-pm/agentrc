@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parents[3] / "agentrc" / "data" / "hooks" / "lib"
+HERE = Path(__file__).resolve().parents[3] / "stratarc" / "data" / "hooks" / "lib"
 SPEC = importlib.util.spec_from_file_location("_session_card_accounting", HERE / "session-card.py")
 assert SPEC and SPEC.loader
 card_lib = importlib.util.module_from_spec(SPEC)

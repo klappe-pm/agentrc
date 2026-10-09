@@ -15,14 +15,14 @@ from pathlib import Path
 import pytest
 
 
-from agentrc.adapters import _foreign, claude, codex, cursor, gemini
-from agentrc.adapters._components import RenderRefused
+from stratarc.adapters import _foreign, claude, codex, cursor, gemini
+from stratarc.adapters._components import RenderRefused
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 # The four synthetic captured bodies, one per runtime shape.

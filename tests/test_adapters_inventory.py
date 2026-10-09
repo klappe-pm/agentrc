@@ -16,18 +16,18 @@ from pathlib import Path
 
 import pytest
 
-from agentrc.adapters import _inventory as inventory
+from stratarc.adapters import _inventory as inventory
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 
 def adapter(name: str):
-    return importlib.import_module(f"agentrc.adapters.{name}")
+    return importlib.import_module(f"stratarc.adapters.{name}")
 
 
 def names(items, kind):
@@ -55,7 +55,7 @@ class FixtureHome(unittest.TestCase):
 
 class TestEveryAdapterExposesTheInventory(unittest.TestCase):
     def test_each_registered_adapter_has_external_inventory(self):
-        from agentrc.adapters._common import runtime_registry
+        from stratarc.adapters._common import runtime_registry
 
         for name in runtime_registry():
             with self.subTest(runtime=name):
@@ -179,7 +179,7 @@ class TestOpenCode(FixtureHome):
             '{\n  // comment\n  "mcp": {"docs": {"type": "remote", "headers": {"X-Mode": "a"}}},\n  "plugin": ["opencode-foo"],\n}\n',
         )
         self.write(".config/opencode/opencode.json", {"mcp": {"other": {"type": "local"}}})
-        self.write(".config/opencode/plugins/agentrc-hooks.ts", "// ours\n")
+        self.write(".config/opencode/plugins/stratarc-hooks.ts", "// ours\n")
         self.write(".config/opencode/plugins/status-panel.js", "// foreign\n")
         items = adapter("opencode").external_inventory(self.home / ".config" / "opencode")
         self.assertEqual(names(items, "mcp_server"), ["docs", "other"])
@@ -287,7 +287,7 @@ class TestClassify(unittest.TestCase):
     def test_declared_undeclared_returned_unreadable(self):
         document = {
             "mcp_servers": [
-                {"name": "kept", "runtimes": ["claude"], "wanted": True, "owner": "agentrc"},
+                {"name": "kept", "runtimes": ["claude"], "wanted": True, "owner": "stratarc"},
                 {"name": "gone", "runtimes": ["claude"], "wanted": False, "owner": "some-installer"},
             ],
             "plugins": [

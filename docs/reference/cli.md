@@ -1,18 +1,18 @@
 # cli
 
-This page is the reference for the `agentrc` command: every subcommand, its arguments, its exit statuses and what it prints. It describes what the command does, not when to use it; the [tutorial](../tutorials/getting-started.md) and the [how-to guides](../how-to-guides/README.md) cover that. Once the engine is extracted it will document every option and example for each subcommand.
+This page is the reference for the `stratarc` command: every subcommand, its arguments, its exit statuses and what it prints. It describes what the command does, not when to use it; the [tutorial](../tutorials/getting-started.md) and the [how-to guides](../how-to-guides/README.md) cover that. Once the engine is extracted it will document every option and example for each subcommand.
 
 ## global-options
 
 | option | effect |
 | --- | --- |
-| `--version` | print `agentrc <version>` and exit 0 |
+| `--version` | print `stratarc <version>` and exit 0 |
 | `--help` | print the usage summary and exit 0 |
 
 ## init
 
 ```bash
-agentrc init TARGET
+stratarc init TARGET
 ```
 
 Scaffolds a source root from the bundled template into `TARGET`. `TARGET` must be absent or an empty directory.
@@ -25,7 +25,7 @@ Scaffolds a source root from the bundled template into `TARGET`. `TARGET` must b
 ## sync-check-diff-prune-reconcile
 
 ```bash
-agentrc sync
+stratarc sync
 ```
 
-`sync`, `check`, `diff`, `prune` and `reconcile` are placeholders in this release. Each prints `agentrc <name>: not yet extracted` to standard error and exits 2. Their options and behavior are documented here as each one lands.
+`sync`, `check`, `diff`, `prune` and `reconcile` are placeholders in this release. Each prints `stratarc <name>: not yet extracted` to standard error and exits 2. Their options and behavior are documented here as each one lands.

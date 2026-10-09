@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import deploy_guard
+from stratarc import deploy_guard
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,7 +55,7 @@ class TestStampAndVersion:
     def test_write_then_read_round_trips(self, tmp_path):
         target = tmp_path / "runtime"
         path = deploy_guard.write_stamp(target, 4, tmp_path)
-        assert path.name == deploy_guard.stamp_name() == ".agentrc-deploy.json"
+        assert path.name == deploy_guard.stamp_name() == ".stratarc-deploy.json"
         stamp = deploy_guard.read_stamp(target)
         assert stamp["policyVersion"] == 4
         assert stamp["source"] == str(tmp_path)
@@ -122,7 +122,7 @@ class TestEnvironmentRef:
 
     def test_the_checkout_setting_selects_an_environment_and_its_ref(self, tmp_path):
         root = _checkout(tmp_path / "root")
-        assert deploy_guard.environment_config() == "agentrc.environment"
+        assert deploy_guard.environment_config() == "stratarc.environment"
         _git(root, "config", deploy_guard.environment_config(), "workstation")
         assert deploy_guard.selected_environment(root) == "workstation"
         assert deploy_guard.deploy_ref(root) == "stable"
@@ -177,7 +177,7 @@ class TestEnvironmentRef:
         root = _checkout(tmp_path / "root")
         env = {**os.environ, "PYTHONPATH": str(REPO_ROOT), deploy_guard.ENVIRONMENT_VARIABLE: "workstation"}
         done = subprocess.run(
-            [sys.executable, "-m", "agentrc.deploy_guard", "ref", "--root", str(root)],
+            [sys.executable, "-m", "stratarc.deploy_guard", "ref", "--root", str(root)],
             capture_output=True,
             text=True,
             env=env,

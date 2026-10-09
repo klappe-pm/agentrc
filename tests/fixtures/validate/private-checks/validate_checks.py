@@ -1,6 +1,6 @@
 """A source root's private validator checks, as tests/test_validate.py installs them under scripts/private/."""
 
-from agentrc.validate import finding
+from stratarc.validate import finding
 
 
 def check_widgets(root):

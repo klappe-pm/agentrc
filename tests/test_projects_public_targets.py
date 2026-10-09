@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import projects
+from stratarc import projects
 
 
 def git(*args: str) -> None:
@@ -60,13 +60,13 @@ class Tree:
 
 
 @pytest.fixture
-def tree(tmp_path, monkeypatch, agentrc_home):
+def tree(tmp_path, monkeypatch, stratarc_home):
     source = tmp_path.resolve() / "source"
     (source / "projects-root").mkdir(parents=True)
     projects_dir = tmp_path.resolve() / "projects"
     (projects_dir / "active").mkdir(parents=True)
     monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(projects_dir))
-    monkeypatch.delenv("AGENTRC_SOURCE", raising=False)
+    monkeypatch.delenv("STRATARC_SOURCE", raising=False)
     for name in ("ROOT", "PROJECTS_SRC", "RETIRED_RULES", "RETIRED_HOOKS", "_ROOT_CONFIGURED"):
         monkeypatch.setattr(projects, name, getattr(projects, name))
     projects.configure_root(source)

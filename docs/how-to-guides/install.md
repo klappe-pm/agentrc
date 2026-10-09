@@ -1,19 +1,19 @@
 # install
 
-This guide covers installing agentrc for someone who already knows they want it: the supported install methods, the Python versions it runs on, and how to upgrade and uninstall. It assumes nothing about your runtimes. If you have never used agentrc, start with [getting started](../tutorials/getting-started.md) instead, which walks the install as one step among several.
+This guide covers installing stratarc for someone who already knows they want it: the supported install methods, the Python versions it runs on, and how to upgrade and uninstall. It assumes nothing about your runtimes. If you have never used stratarc, start with [getting started](../tutorials/getting-started.md) instead, which walks the install as one step among several.
 
 Once the engine is extracted this page will also describe installing the git hooks and verifying that each runtime's target directory is writable.
 
 ## requirements
 
-Python 3.11 or newer. agentrc has no runtime dependencies beyond the standard library.
+Python 3.11 or newer. stratarc has no runtime dependencies beyond the standard library.
 
 ## install-from-the-repository
 
 Until the first release is published, install straight from GitHub:
 
 ```bash
-pipx install git+https://github.com/klappe-pm/agentrc
+pipx install git+https://github.com/klappe-pm/stratarc
 ```
 
 ## install-from-pypi
@@ -21,7 +21,7 @@ pipx install git+https://github.com/klappe-pm/agentrc
 Once released:
 
 ```bash
-pipx install agentrc
+pipx install stratarc
 ```
 
 ## install-for-development
@@ -35,15 +35,15 @@ pip install -e '.[test]'
 ## upgrade
 
 ```bash
-pipx upgrade agentrc
+pipx upgrade stratarc
 ```
 
-For a repository install, run `pipx reinstall agentrc` to pick up the latest commit.
+For a repository install, run `pipx reinstall stratarc` to pick up the latest commit.
 
 ## uninstall
 
 ```bash
-pipx uninstall agentrc
+pipx uninstall stratarc
 ```
 
 Uninstalling removes the command only. Your source root and anything already deployed into runtime directories stay where they are.

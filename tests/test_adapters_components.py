@@ -18,26 +18,26 @@ try:
 except ImportError:  # the older framework python3 on macOS
     tomllib = None
 
-from agentrc.adapters import _components as components_render
-from agentrc.adapters._inventory import strip_jsonc
+from stratarc.adapters import _components as components_render
+from stratarc.adapters._inventory import strip_jsonc
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 
 def adapter(name: str):
-    return importlib.import_module(f"agentrc.adapters.{name}")
+    return importlib.import_module(f"stratarc.adapters.{name}")
 
 
 def server(name: str, **extra) -> dict:
     entry = {
         "name": name,
         "runtimes": ["claude", "codex", "gemini", "opencode", "cursor"],
-        "owner": "agentrc",
+        "owner": "stratarc",
         "wanted": True,
         "command": "npx",
         "args": ["-y", f"@example/{name}"],
@@ -128,7 +128,7 @@ class Rendering(unittest.TestCase):
             "[[profiles_list]]\n"
             'name = "p"\n'
         )
-        (target / "agentrc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo", "spaced"]}))
+        (target / "stratarc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo", "spaced"]}))
         self.select(server("demo"), server("spaced"))
         adapter("codex").sync(self.stage, target)
         config = self.codex_config()
@@ -162,7 +162,7 @@ class Rendering(unittest.TestCase):
             with self.subTest(label):
                 target.mkdir(parents=True, exist_ok=True)
                 (target / "config.toml").write_text(text)
-                (target / "agentrc-mcp-servers.json").write_text(json.dumps({"mcp_servers": list(managed)}))
+                (target / "stratarc-mcp-servers.json").write_text(json.dumps({"mcp_servers": list(managed)}))
                 self.select(*(server(name) for name in managed))
                 adapter("codex").sync(self.stage, target)
                 config = self.codex_config()
@@ -178,14 +178,14 @@ class Rendering(unittest.TestCase):
         target.mkdir(parents=True)
         original = '[mcp_servers]\ndemo.args = [\n  "a",\n]\n'
         (target / "config.toml").write_text(original)
-        (target / "agentrc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo"]}))
+        (target / "stratarc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo"]}))
         self.select(server("demo"))
         with self.assertRaises(components_render.RenderRefused) as refused:
             adapter("codex").sync(self.stage, target)
         self.assertIn("demo", str(refused.exception))
         self.assertIn("by hand", str(refused.exception))
         self.assertEqual((target / "config.toml").read_text(), original)
-        self.assertEqual(json.loads((target / "agentrc-mcp-servers.json").read_text()), {"mcp_servers": ["demo"]})
+        self.assertEqual(json.loads((target / "stratarc-mcp-servers.json").read_text()), {"mcp_servers": ["demo"]})
 
     def test_codex_refuses_to_write_without_a_toml_parser(self):
         """Codex review 4 of PR 92: on a Python without tomllib the
@@ -197,7 +197,7 @@ class Rendering(unittest.TestCase):
         target.mkdir(parents=True)
         original = '[mcp_servers]\ndemo.args = [\n  "a",\n]\n'
         (target / "config.toml").write_text(original)
-        (target / "agentrc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo"]}))
+        (target / "stratarc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo"]}))
         self.select(server("demo"))
         with patch.object(components_render, "tomllib", None):
             with self.assertRaises(components_render.RenderRefused) as refused:
@@ -218,7 +218,7 @@ class Rendering(unittest.TestCase):
             '\n[mcp_servers.demo]\ncommand = "old"\n'
         )
         (target / "config.toml").write_text(original)
-        (target / "agentrc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo"]}))
+        (target / "stratarc-mcp-servers.json").write_text(json.dumps({"mcp_servers": ["demo"]}))
         self.select(server("demo"))
         with self.assertRaises(components_render.RenderRefused) as refused:
             adapter("codex").sync(self.stage, target)
@@ -401,7 +401,7 @@ class ReversePassAfterRendering(unittest.TestCase):
     """A rendered server is declared; a hand-added one is undeclared."""
 
     def test_rendered_is_declared_and_hand_added_is_undeclared(self):
-        sync = pytest.importorskip("agentrc.sync")
+        sync = pytest.importorskip("stratarc.sync")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             entry = server("railway")
@@ -413,7 +413,7 @@ class ReversePassAfterRendering(unittest.TestCase):
             target.mkdir()
             (target / "config.toml").write_text('[mcp_servers.handmade]\ncommand = "mine"\n')
             adapter("codex").sync(stage, target)
-            findings = sync.reverse_pass(root, stage, {"codex": ("agentrc.adapters.codex", target)}, home=root)
+            findings = sync.reverse_pass(root, stage, {"codex": ("stratarc.adapters.codex", target)}, home=root)
             labels = {f.kind: [] for f in findings["codex"]}
             for f in findings["codex"]:
                 labels[f.kind].append(f.label)

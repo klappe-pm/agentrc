@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import staging
-from agentrc.resources import data_dir
-from agentrc.rules_digest import render_root
+from stratarc import staging
+from stratarc.resources import data_dir
+from stratarc.rules_digest import render_root
 
-TOKEN = "${AGENTRC_SOURCE}"
+TOKEN = "${STRATARC_SOURCE}"
 
 
 class Plane:
@@ -157,7 +157,7 @@ class TestSharedRulesInProjectStage:
 
 
 class TestPackagedHooks:
-    """With an empty source root the stage is built from the guards packaged with agentrc."""
+    """With an empty source root the stage is built from the guards packaged with stratarc."""
 
     def test_a_selected_guard_is_staged_from_the_package(self, root, stage_of):
         stage, notes = stage_of(Plane(hooks={"prose-guard"}))
@@ -432,12 +432,12 @@ class TestProjectDirectories:
 
 
 class TestEngineNameInTheStage:
-    """A stage holds no agentrc.toml of its own, so it records the source root's engine name for the adapters that read it."""
+    """A stage holds no stratarc.toml of its own, so it records the source root's engine name for the adapters that read it."""
 
     def test_a_custom_named_source_root_renders_the_servers_it_owns(self, root, stage_of):
-        from agentrc.adapters import _components
+        from stratarc.adapters import _components
 
-        write(root / "agentrc.toml", 'name = "custom"\n')
+        write(root / "stratarc.toml", 'name = "custom"\n')
         manifest = {
             "version": 1,
             "mcp_servers": [{"name": "mine", "runtimes": ["codex"], "owner": "custom", "wanted": True, "command": "npx"}],

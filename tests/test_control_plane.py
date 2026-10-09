@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentrc.control_plane import ControlPlane, main, set_cell
+from stratarc.control_plane import ControlPlane, main, set_cell
 
 OLD_SHAPE = """\
 # control-plane
@@ -64,21 +64,21 @@ class TestLoadDefaultPath:
 
 
 class TestFindCheckoutHome:
-    """find_checkout's default base hangs under paths.home(), so AGENTRC_HOME redirects it like every runtime target."""
+    """find_checkout's default base hangs under paths.home(), so STRATARC_HOME redirects it like every runtime target."""
 
-    def test_checkouts_are_found_under_the_overridden_home(self, agentrc_home):
-        checkout = agentrc_home / "projects" / "active" / "demo"
+    def test_checkouts_are_found_under_the_overridden_home(self, stratarc_home):
+        checkout = stratarc_home / "projects" / "active" / "demo"
         (checkout / ".git").mkdir(parents=True)
-        (agentrc_home / "projects" / "active" / "plain").mkdir()
+        (stratarc_home / "projects" / "active" / "plain").mkdir()
         assert ControlPlane().find_checkout("demo") == [checkout]
         assert ControlPlane().find_checkout("plain") == []
 
-    def test_trash_and_pool_trees_are_not_checkouts(self, agentrc_home):
+    def test_trash_and_pool_trees_are_not_checkouts(self, stratarc_home):
         for hidden in (".trash", "_pool"):
-            (agentrc_home / "projects" / hidden / "demo" / ".git").mkdir(parents=True)
+            (stratarc_home / "projects" / hidden / "demo" / ".git").mkdir(parents=True)
         assert ControlPlane().find_checkout("demo") == []
 
-    def test_an_explicit_root_wins(self, agentrc_home, tmp_path):
+    def test_an_explicit_root_wins(self, stratarc_home, tmp_path):
         base = tmp_path / "elsewhere"
         (base / "active" / "demo" / ".git").mkdir(parents=True)
         assert ControlPlane().find_checkout("demo", base) == [base / "active" / "demo"]

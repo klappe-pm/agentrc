@@ -1,4 +1,4 @@
-// Behavioral test of agentrc/data/hooks/opencode-runtime-hooks.ts, the OpenCode plugin
+// Behavioral test of stratarc/data/hooks/opencode-runtime-hooks.ts, the OpenCode plugin
 // bridge (issue #230). Run with `bun test`; scripts/test.py runs it when bun
 // is installed and names bun as the missing tool when it is not.
 //
@@ -74,7 +74,7 @@ beforeAll(async () => {
   process.env.HOME = join(root, "home")
   mkdirSync(worktree, { recursive: true })
   // The bridge reads HOME once, when it is imported.
-  bridge = (await import("../../agentrc/data/hooks/opencode-runtime-hooks.ts")).LlmRootHooks
+  bridge = (await import("../../stratarc/data/hooks/opencode-runtime-hooks.ts")).LlmRootHooks
 })
 
 afterAll(() => {

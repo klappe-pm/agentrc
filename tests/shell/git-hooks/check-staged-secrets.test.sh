@@ -2,7 +2,7 @@
 # Behavioral tests for the staged secret scanner.
 set -euo pipefail
 
-CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/git-hooks" && pwd)/check-staged-secrets.sh"
+CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/git-hooks" && pwd)/check-staged-secrets.sh"
 PASS=0
 FAIL=0
 

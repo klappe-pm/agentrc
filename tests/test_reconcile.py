@@ -14,15 +14,15 @@ from unittest.mock import patch
 
 import pytest
 
-from agentrc import reconcile
-from agentrc.control_plane import ControlPlane
-from agentrc.resources import data_dir
+from stratarc import reconcile
+from stratarc.control_plane import ControlPlane
+from stratarc.resources import data_dir
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "reconcile"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Where the per-project snapshot lands, relative to the checkout, under the default engine name.
-SNAPSHOT = Path("agentrc-control-plane.md")
+SNAPSHOT = Path("stratarc-control-plane.md")
 SNAPSHOT_DIR = Path(".docs")
 
 IDENTITY = ("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false")
@@ -52,7 +52,7 @@ class Env:
         return self.control_plane.read_text(encoding="utf-8")
 
     def point(self, root: Path, projects: Path | None = None) -> None:
-        self.monkeypatch.setenv("AGENTRC_SOURCE", str(root))
+        self.monkeypatch.setenv("STRATARC_SOURCE", str(root))
         if projects is not None:
             self.monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(projects))
 
@@ -75,8 +75,8 @@ class Env:
 
 
 @pytest.fixture
-def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agentrc_home: Path) -> Env:
-    for name in ("LLM_ROOT_HELD_PROJECTS", "LLM_ROOT_PROJECTS_DIR", "AGENTRC_SOURCE"):
+def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stratarc_home: Path) -> Env:
+    for name in ("LLM_ROOT_HELD_PROJECTS", "LLM_ROOT_PROJECTS_DIR", "STRATARC_SOURCE"):
         monkeypatch.delenv(name, raising=False)
     for key in [key for key in os.environ if key.startswith("GIT_")]:
         monkeypatch.delenv(key, raising=False)
@@ -93,19 +93,19 @@ class TestProjectsDirectory:
         env.monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(tmp_path / "elsewhere"))
         assert reconcile.projects_dir() == tmp_path / "elsewhere"
 
-    def test_it_defaults_to_projects_under_the_agentrc_home(self, env, agentrc_home):
+    def test_it_defaults_to_projects_under_the_stratarc_home(self, env, stratarc_home):
         env.monkeypatch.delenv("LLM_ROOT_PROJECTS_DIR")
-        assert reconcile.projects_dir() == agentrc_home / "projects"
+        assert reconcile.projects_dir() == stratarc_home / "projects"
 
-    def test_agentrc_toml_names_the_directory_that_holds_the_status_directories(self, env, tmp_path):
+    def test_stratarc_toml_names_the_directory_that_holds_the_status_directories(self, env, tmp_path):
         env.root.mkdir(parents=True)
-        (env.root / "agentrc.toml").write_text(f'projects_root = "{tmp_path / "configured"}"\n', encoding="utf-8")
+        (env.root / "stratarc.toml").write_text(f'projects_root = "{tmp_path / "configured"}"\n', encoding="utf-8")
         env.monkeypatch.delenv("LLM_ROOT_PROJECTS_DIR")
         assert reconcile.projects_dir() == tmp_path / "configured"
 
 
 class TestSourceRootResolution:
-    """The source root is --root, then AGENTRC_SOURCE, then agentrc.toml discovery from the current directory, then the current directory."""
+    """The source root is --root, then STRATARC_SOURCE, then stratarc.toml discovery from the current directory, then the current directory."""
 
     def _source(self, base: Path, name: str = "fixture-source") -> Path:
         root = base.resolve() / name
@@ -118,11 +118,11 @@ class TestSourceRootResolution:
         environment = {
             key: value
             for key, value in os.environ.items()
-            if key != "AGENTRC_SOURCE" and not key.startswith("GIT_")
+            if key != "STRATARC_SOURCE" and not key.startswith("GIT_")
         }
         environment.update(PYTHONPATH=str(REPO_ROOT), **extra)
         return subprocess.run(
-            [sys.executable, "-m", "agentrc.reconcile", *args],
+            [sys.executable, "-m", "stratarc.reconcile", *args],
             capture_output=True,
             text=True,
             cwd=tmp_path,
@@ -135,11 +135,11 @@ class TestSourceRootResolution:
         assert reconcile.root() == source
         assert reconcile.control_plane_path() == source / "control-plane.md"
 
-    def test_with_no_override_the_nearest_agentrc_toml_names_the_root(self, env, tmp_path):
+    def test_with_no_override_the_nearest_stratarc_toml_names_the_root(self, env, tmp_path):
         source = self._source(tmp_path)
-        (source / "agentrc.toml").write_text("", encoding="utf-8")
+        (source / "stratarc.toml").write_text("", encoding="utf-8")
         nested = source / "rules"
-        env.monkeypatch.delenv("AGENTRC_SOURCE")
+        env.monkeypatch.delenv("STRATARC_SOURCE")
         env.monkeypatch.chdir(nested)
         assert reconcile.root() == source
 
@@ -159,23 +159,23 @@ class TestSourceRootResolution:
     def test_a_run_with_the_root_flag_reconciles_that_tree_and_nothing_else(self, env, tmp_path):
         source = self._source(tmp_path)
         ambient = self._source(tmp_path, "ambient")
-        result = self._run(tmp_path, env, "--root", str(source), "--check", AGENTRC_SOURCE=str(ambient))
+        result = self._run(tmp_path, env, "--root", str(source), "--check", STRATARC_SOURCE=str(ambient))
         assert result.returncode == 1, result.stderr
         assert f"stale {source / 'control-plane.md'}" in result.stdout
         assert not (source / "control-plane.md").exists()
         assert str(ambient) not in result.stdout
 
-    def test_a_run_under_agentrc_source_reconciles_that_tree(self, env, tmp_path):
+    def test_a_run_under_stratarc_source_reconciles_that_tree(self, env, tmp_path):
         source = self._source(tmp_path)
-        result = self._run(tmp_path, env, "--check", AGENTRC_SOURCE=str(source))
+        result = self._run(tmp_path, env, "--check", STRATARC_SOURCE=str(source))
         assert result.returncode == 1, result.stderr
         assert f"stale {source / 'control-plane.md'}" in result.stdout
 
     def test_a_run_never_imports_the_source_root_as_code(self, env, tmp_path):
         """A decoy engine package inside the source root is not on the import path of a run."""
         source = self._source(tmp_path)
-        (source / "agentrc").mkdir()
-        (source / "agentrc" / "control_plane.py").write_text("raise SystemExit(9)\n", encoding="utf-8")
+        (source / "stratarc").mkdir()
+        (source / "stratarc" / "control_plane.py").write_text("raise SystemExit(9)\n", encoding="utf-8")
         result = self._run(tmp_path, env, "--root", str(source), "--check")
         assert result.returncode == 1, result.stderr
 
@@ -267,12 +267,12 @@ class TestRuntimes:
             (adapters / f"{name}.py").write_text("\n", encoding="utf-8")
         assert [option for option, _path in reconcile.runtime_options(adapters)] == ["runtime:claude"]
 
-    def test_the_packaged_adapters_are_the_runtime_rows_and_link_to_agentrc_toml(self, env):
+    def test_the_packaged_adapters_are_the_runtime_rows_and_link_to_stratarc_toml(self, env):
         options = reconcile.runtime_options()
         names = [option for option, _path in options]
         assert names == sorted(names)
         assert {"runtime:claude", "runtime:codex", "runtime:gemini", "runtime:cursor", "runtime:opencode"} <= set(names)
-        assert {path for _option, path in options} == {env.root / "agentrc.toml"}
+        assert {path for _option, path in options} == {env.root / "stratarc.toml"}
         assert not any(name.startswith("runtime:_") for name in names)
 
 
@@ -382,7 +382,7 @@ class TestSnapshots:
         reconcile.refresh_snapshots({"demo": checkout}, "# control-plane\n", check=False)
 
         text = (checkout / SNAPSHOT_DIR / SNAPSHOT).read_text(encoding="utf-8")
-        assert text.startswith("# agentrc-control-plane\n")
+        assert text.startswith("# stratarc-control-plane\n")
         assert "The canonical source is the source root's `control-plane.md`." in text
         assert str(Path.home()) not in text
         assert "~/" not in text
@@ -390,10 +390,10 @@ class TestSnapshots:
 
     def test_the_engine_name_names_the_snapshot_and_its_header(self, env, tmp_path):
         env.root.mkdir(parents=True)
-        (env.root / "agentrc.toml").write_text('name = "acme"\n', encoding="utf-8")
+        (env.root / "stratarc.toml").write_text('name = "acme"\n', encoding="utf-8")
         checkout = tmp_path / "demo"
         checkout.mkdir()
-        stale = checkout / "agentrc-control-plane.md"
+        stale = checkout / "stratarc-control-plane.md"
         stale.write_text("not ours\n", encoding="utf-8")
 
         reconcile.refresh_snapshots({"demo": checkout}, "# control-plane\n", check=False)

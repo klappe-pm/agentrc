@@ -12,7 +12,7 @@
 # and that the skip condition still names the process this shim exists for.
 set -euo pipefail
 
-SHIM="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/bin" && pwd)/caffeinate-shim.sh"
+SHIM="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/bin" && pwd)/caffeinate-shim.sh"
 
 fail() {
   printf '%s\n' "caffeinate-shim.test: $1" >&2

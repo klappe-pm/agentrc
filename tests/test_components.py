@@ -1,4 +1,4 @@
-"""Tests for agentrc.components, the loader and checker for components.json.
+"""Tests for stratarc.components, the loader and checker for components.json.
 
 The manifest declares the sections and the entry shape; a loadout may name only what it declares. Every test runs on a fixture document or on tests/fixtures/components/manifest.json, never on a live manifest.
 """
@@ -13,8 +13,8 @@ from unittest import mock
 
 import pytest
 
-from agentrc import components
-from agentrc.adapters import _common
+from stratarc import components
+from stratarc.adapters import _common
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 FIXTURE_DIR = FIXTURES / "components"

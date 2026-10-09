@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../agentrc/data/hooks" && pwd)/prose-guard.sh"
+SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../stratarc/data/hooks" && pwd)/prose-guard.sh"
 
 EMDASH=$'\xe2\x80\x94'   # U+2014
 ENDASH=$'\xe2\x80\x93'   # U+2013

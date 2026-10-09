@@ -9,14 +9,14 @@ from pathlib import Path
 import pytest
 
 
-from agentrc.adapters import cursor
-from agentrc.adapters._common import owned_dir_entries
+from stratarc.adapters import cursor
+from stratarc.adapters._common import owned_dir_entries
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 

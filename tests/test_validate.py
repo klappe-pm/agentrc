@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from agentrc import validate as vs
+from stratarc import validate as vs
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -371,7 +371,7 @@ class TestRuleTiers:
 
 class TestReferenceGraphDelegation:
     def test_errors_pass_through_and_warnings_are_dropped(self, tmp_path: Path) -> None:
-        pytest.importorskip("agentrc.source_graph")
+        pytest.importorskip("stratarc.source_graph")
         write(tmp_path, "hooks/hooks.json", json.dumps({"PreToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "hooks/vanished.sh"}]}]}))
         write(tmp_path, "docs/notes.md", "# notes\n\nSee [gone](scripts/gone.py) for the old approach.\n")
         findings = vs.check_reference_graph(tmp_path)
@@ -381,7 +381,7 @@ class TestReferenceGraphDelegation:
         assert all(item["severity"] == "error" for item in findings)
 
     def test_clean_tree_has_no_findings(self, tmp_path: Path) -> None:
-        pytest.importorskip("agentrc.source_graph")
+        pytest.importorskip("stratarc.source_graph")
         write(tmp_path, "scripts/tool.py", '"""Tool."""\n')
         assert vs.check_reference_graph(tmp_path) == []
 
@@ -430,7 +430,7 @@ class TestWorkflowActionPins:
 @pytest.fixture
 def delivered(monkeypatch: pytest.MonkeyPatch) -> None:
     """Name the files the project delivery copies, so these tests do not depend on that module's own list."""
-    from agentrc import projects
+    from stratarc import projects
 
     monkeypatch.setattr(projects, "CARRIED_GUARD_FILES", ("lib/example-detect.py", "lib/other-detect.py", "example-guard.sh"), raising=False)
     monkeypatch.setattr(projects, "CHECK_SCRIPT_SOURCE", "scripts/ci/example-check.py", raising=False)
@@ -516,18 +516,18 @@ class TestMainEntryPoint:
         assert "agents/bad.md" in capsys.readouterr().out
 
     def test_the_root_is_bound_as_the_source_root_while_it_runs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("AGENTRC_SOURCE", "/previous/value")
+        monkeypatch.setenv("STRATARC_SOURCE", "/previous/value")
         seen: list[str | None] = []
-        monkeypatch.setattr(vs, "CHECKS", (lambda root: seen.append(os.environ.get("AGENTRC_SOURCE")) or [],))
+        monkeypatch.setattr(vs, "CHECKS", (lambda root: seen.append(os.environ.get("STRATARC_SOURCE")) or [],))
         vs.main(["--root", str(tmp_path)])
         assert seen == [str(tmp_path.resolve())]
-        assert os.environ["AGENTRC_SOURCE"] == "/previous/value"
+        assert os.environ["STRATARC_SOURCE"] == "/previous/value"
 
     def test_an_unset_source_variable_is_unset_again_afterwards(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("AGENTRC_SOURCE", raising=False)
+        monkeypatch.delenv("STRATARC_SOURCE", raising=False)
         with vs.bound_source(tmp_path):
-            assert os.environ["AGENTRC_SOURCE"] == str(tmp_path)
-        assert "AGENTRC_SOURCE" not in os.environ
+            assert os.environ["STRATARC_SOURCE"] == str(tmp_path)
+        assert "STRATARC_SOURCE" not in os.environ
 
     def test_the_worked_example_passes_the_generic_strict_gate(self, repo_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
         assert vs.main(["--root", str(repo_root / "examples" / "notes-cli" / "source"), "--strict", "--checks", "generic"]) == 0
@@ -603,7 +603,7 @@ class TestPrivateChecks:
 
     def test_a_check_that_raises_is_one_finding_and_the_rest_still_run(self, tmp_path: Path) -> None:
         module = (
-            "from agentrc.validate import finding\n\n\n"
+            "from stratarc.validate import finding\n\n\n"
             "def check_breaks(root):\n    raise ValueError('bad input')\n\n\n"
             "def check_fine(root):\n    return [finding('warning', 'fine', 'x', 'still ran')]\n\n\n"
             "VALIDATE_CHECKS = [check_breaks, check_fine]\n"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agentrc.strip_provenance import main, strip_provenance
+from stratarc.strip_provenance import main, strip_provenance
 
 WITH_KEYS = """---
 domain: engineering

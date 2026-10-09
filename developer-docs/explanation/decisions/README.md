@@ -1,6 +1,6 @@
 # decisions
 
-This folder holds agentrc's decision records: one page per choice that shaped the code, written when the choice was made, so a later contributor can see what was decided, what was considered instead and why. A record is never rewritten once accepted; a reversal is a new record that names the one it supersedes. Read the records that touch a part of the code before proposing to change it.
+This folder holds stratarc's decision records: one page per choice that shaped the code, written when the choice was made, so a later contributor can see what was decided, what was considered instead and why. A record is never rewritten once accepted; a reversal is a new record that names the one it supersedes. Read the records that touch a part of the code before proposing to change it.
 
 ## format
 
@@ -8,4 +8,4 @@ Each record is a file named `YYYY-MM-DD-<short-kebab-title>.md` with these secti
 
 ## records
 
-None yet. The first records will cover the choices already visible in the code: keeping runtime assets under `agentrc/data/` and reading them through `importlib.resources`, shipping the attribution and token-shaped value detectors with the package, and placing the user and developer documentation in two trees with the same quadrant shape.
+None yet. The first records will cover the choices already visible in the code: keeping runtime assets under `stratarc/data/` and reading them through `importlib.resources`, shipping the attribution and token-shaped value detectors with the package, and placing the user and developer documentation in two trees with the same quadrant shape.

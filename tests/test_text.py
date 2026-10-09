@@ -7,7 +7,7 @@ import tomllib
 
 import pytest
 
-from agentrc.adapters._text import set_top_level, strip_jsonc_comments
+from stratarc.adapters._text import set_top_level, strip_jsonc_comments
 
 
 class TestStripJsoncComments:

@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-DETECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/hooks/lib" && pwd)/attribution-detect.py"
+DETECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/hooks/lib" && pwd)/attribution-detect.py"
 
 AGENT="Cla""ude"
 AGENT_LOWER="cla""ude"
@@ -292,7 +292,7 @@ rm -rf "$EDITS"
 # The exemption is off in a public repository: a checkout listed in <source
 # root>/projects-root/public-targets.json (the source root being LLM_ROOT
 # here) by its directory name, its main worktree's directory name or its
-# origin's owner/repo slug, or any checkout when AGENTRC_PUBLIC=1. The same
+# origin's owner/repo slug, or any checkout when STRATARC_PUBLIC=1. The same
 # frontmatter line is clean in a private fixture checkout and denied in a
 # public one, on a Write, on an Edit, on a relative path resolved against
 # the payload's cwd, in a docs directory that does not exist yet, in a
@@ -337,10 +337,10 @@ assert_payload "Write where the origin slug is another repo"   "$(write_payload 
 assert_payload "Edit docs frontmatter in a private checkout"   "$(edit_payload "$PUBLIC/private-repo/docs/note.md" 'session-link: ""' "$SESSION_LINK")" clean
 assert_payload "Edit docs frontmatter in a public checkout"    "$(edit_payload "$PUBLIC/pub-repo/docs/note.md" 'session-link: ""' "$SESSION_LINK")" dirty
 assert_payload "Write with no checkout at all stays exempt"    "$(write_payload Write "$PUBLIC/docs/x.md" content "$FRONTMATTER")" clean
-export AGENTRC_PUBLIC=1
-assert_payload "AGENTRC_PUBLIC=1 denies in a private checkout" "$(write_payload Write "$PUBLIC/private-repo/docs/x.md" content "$FRONTMATTER")" dirty
-assert_payload "AGENTRC_PUBLIC=1 denies with no checkout"      "$(write_payload Write /repo/docs/ideas/x.md content "$FRONTMATTER")" dirty
-unset AGENTRC_PUBLIC
+export STRATARC_PUBLIC=1
+assert_payload "STRATARC_PUBLIC=1 denies in a private checkout" "$(write_payload Write "$PUBLIC/private-repo/docs/x.md" content "$FRONTMATTER")" dirty
+assert_payload "STRATARC_PUBLIC=1 denies with no checkout"      "$(write_payload Write /repo/docs/ideas/x.md content "$FRONTMATTER")" dirty
+unset STRATARC_PUBLIC
 # An absent list names nobody, so the exemption holds as before. A list that
 # exists and cannot be read fails closed: the exemption is off everywhere,
 # the private checkout included, until the file is fixed.

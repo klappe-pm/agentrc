@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from agentrc.rules_digest import (
+from stratarc.rules_digest import (
     CANONICAL_RULES_PREFIX,
     DIGEST_BEGIN,
     DIGEST_END,
@@ -208,7 +208,7 @@ class TestPerColumnRendering:
         assert "### global-one" in digest
 
     def test_the_control_plane_defaults_to_the_source_roots(self, tree, monkeypatch):
-        monkeypatch.setenv("AGENTRC_SOURCE", str(tree))
+        monkeypatch.setenv("STRATARC_SOURCE", str(tree))
         digest = build_rules_digest(column="beta")
         assert digest is not None
         assert headings(digest) == ["global-one", "common-two", "project-two"]
@@ -272,8 +272,8 @@ class TestBindingPlusPointerRendering:
 
 
 class TestMarkers:
-    def test_the_marker_names_the_agentrc_command(self):
-        assert "agentrc gen-rules-digest" in DIGEST_BEGIN
+    def test_the_marker_names_the_stratarc_command(self):
+        assert "stratarc gen-rules-digest" in DIGEST_BEGIN
         assert DIGEST_END == "<!-- END RULES-DIGEST -->"
 
     def test_the_digest_opens_and_closes_on_the_markers(self):
@@ -299,50 +299,50 @@ class TestSourceRootRendering:
         "## rationale\n\nWHY " + SOURCE_TOKEN + "/docs.\n"
     )
 
-    def test_render_root_collapses_the_home_directory(self, agentrc_home):
-        assert render_root(agentrc_home / "projects" / "x") == "$HOME/projects/x"
-        assert render_root(agentrc_home) == "$HOME"
+    def test_render_root_collapses_the_home_directory(self, stratarc_home):
+        assert render_root(stratarc_home / "projects" / "x") == "$HOME/projects/x"
+        assert render_root(stratarc_home) == "$HOME"
 
-    def test_render_root_follows_agentrc_home(self, agentrc_home, tmp_path):
+    def test_render_root_follows_stratarc_home(self, stratarc_home, tmp_path):
         other = tmp_path / "elsewhere"
         assert render_root(other) == str(other)
 
-    def test_render_root_keeps_a_path_outside_home_absolute(self, agentrc_home):
-        assert render_root("/opt/agentrc") == "/opt/agentrc"
-        assert rules_prefix("/opt/agentrc") == "/opt/agentrc/rules/"
+    def test_render_root_keeps_a_path_outside_home_absolute(self, stratarc_home):
+        assert render_root("/opt/stratarc") == "/opt/stratarc"
+        assert rules_prefix("/opt/stratarc") == "/opt/stratarc/rules/"
 
     def test_render_source_replaces_every_token_and_nothing_else(self):
-        text = f"a {SOURCE_TOKEN}/x and {SOURCE_TOKEN}/y, not $AGENTRC_SOURCE"
-        assert render_source(text, "/opt/agentrc") == "a /opt/agentrc/x and /opt/agentrc/y, not $AGENTRC_SOURCE"
+        text = f"a {SOURCE_TOKEN}/x and {SOURCE_TOKEN}/y, not $STRATARC_SOURCE"
+        assert render_source(text, "/opt/stratarc") == "a /opt/stratarc/x and /opt/stratarc/y, not $STRATARC_SOURCE"
         text = "no token"
-        assert render_source(text, "/opt/agentrc") is text
+        assert render_source(text, "/opt/stratarc") is text
 
     def test_a_named_source_root_renders_binding_and_pointer(self, rules):
         write_rule(rules, "example-rule.md", self.TOKENED)
         write_tiers(rules, {"global": ["example-rule.md"]})
-        digest = build_rules_digest(rules, source_root="/opt/agentrc")
+        digest = build_rules_digest(rules, source_root="/opt/stratarc")
         assert digest is not None
         assert SOURCE_TOKEN not in digest
-        assert "python3 /opt/agentrc/scripts/tool.py" in digest
-        assert "Full rule: `/opt/agentrc/rules/example-rule.md`" in digest
+        assert "python3 /opt/stratarc/scripts/tool.py" in digest
+        assert "Full rule: `/opt/stratarc/rules/example-rule.md`" in digest
         assert "WHY" not in digest
 
     def test_a_full_body_render_replaces_the_token_too(self, rules):
         write_rule(rules, "example-rule.md", f"Body at {SOURCE_TOKEN}/here.")
         write_tiers(rules, {"global": ["example-rule.md"]})
-        digest = build_rules_digest(rules, source_root="/opt/agentrc")
+        digest = build_rules_digest(rules, source_root="/opt/stratarc")
         assert digest is not None
-        assert "Body at /opt/agentrc/here." in digest
+        assert "Body at /opt/stratarc/here." in digest
 
     def test_an_explicit_prefix_still_wins_over_the_source_root(self, rules):
         write_rule(rules, "example-rule.md", self.TOKENED)
         write_tiers(rules, {"global": ["example-rule.md"]})
-        digest = build_rules_digest(rules, pointer_prefix="rules/", source_root="/opt/agentrc")
+        digest = build_rules_digest(rules, pointer_prefix="rules/", source_root="/opt/stratarc")
         assert digest is not None
         assert "Full rule: `rules/example-rule.md`" in digest
-        assert "python3 /opt/agentrc/scripts/tool.py" in digest
+        assert "python3 /opt/stratarc/scripts/tool.py" in digest
 
-    def test_without_a_source_root_the_digest_keeps_the_token(self, rules, agentrc_home):
+    def test_without_a_source_root_the_digest_keeps_the_token(self, rules, stratarc_home):
         """The committed render: the token stays so the digest is the same on every machine."""
         write_rule(rules, "example-rule.md", self.TOKENED)
         write_tiers(rules, {"global": ["example-rule.md"]})
@@ -351,7 +351,7 @@ class TestSourceRootRendering:
         assert f"python3 {SOURCE_TOKEN}/scripts/tool.py" in digest
         assert f"Full rule: `{SOURCE_TOKEN}/rules/example-rule.md`" in digest
         assert "$HOME" not in digest
-        assert str(agentrc_home) not in digest
+        assert str(stratarc_home) not in digest
 
 
 class TestDefaultRulesRoot:

@@ -16,14 +16,14 @@ from pathlib import Path
 import pytest
 
 
-from agentrc.adapters.claude import owned_outputs, sync
-from agentrc.adapters._common import home, owned_dir_entries, read_frontmatter
+from stratarc.adapters.claude import owned_outputs, sync
+from stratarc.adapters._common import home, owned_dir_entries, read_frontmatter
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(agentrc_home):
-    """Every test reads the home through AGENTRC_HOME, never the real one."""
-    return agentrc_home
+def _isolated_home(stratarc_home):
+    """Every test reads the home through STRATARC_HOME, never the real one."""
+    return stratarc_home
 
 
 
@@ -366,7 +366,7 @@ class TestClaudeAdapter(unittest.TestCase):
 
     def test_agent_graph_hooks_register_for_claude_from_the_shipped_manifest(self):
         shipped = (
-            Path(__file__).resolve().parents[1] / "agentrc" / "data" / "hooks" / "claude-agent-graph-hooks.json"
+            Path(__file__).resolve().parents[1] / "stratarc" / "data" / "hooks" / "claude-agent-graph-hooks.json"
         )
         manifest = json.loads(shipped.read_text())
         self.assertEqual(set(manifest), {"SessionStart", "PreToolUse"})
@@ -860,11 +860,11 @@ class TestPluginEnablement(unittest.TestCase):
             "runtime_settings": {"claude": {"environment_plugins": {"container": [key]}}},
             "plugins": [],
         }), encoding="utf-8")
-        with patch.dict(os.environ, {"AGENTRC_ENVIRONMENT": "container"}):
+        with patch.dict(os.environ, {"STRATARC_ENVIRONMENT": "container"}):
             sync(self.source, self.target)
             self.assertEqual(self._enabled()[key], True)
             self.assertEqual(sync(self.source, self.target), [])
-        with patch.dict(os.environ, {"AGENTRC_ENVIRONMENT": "mac"}):
+        with patch.dict(os.environ, {"STRATARC_ENVIRONMENT": "mac"}):
             sync(self.source, self.target)
             self.assertEqual(self._enabled()[key], False)
 
@@ -876,12 +876,12 @@ class TestPluginEnablement(unittest.TestCase):
             "runtime_settings": {"claude": {"environment_plugins": {"container": [key]}}},
             "plugins": [],
         }), encoding="utf-8")
-        with patch.dict(os.environ, {"AGENTRC_ENVIRONMENT": ""}):
+        with patch.dict(os.environ, {"STRATARC_ENVIRONMENT": ""}):
             sync(self.source, self.target, environment="container")
         self.assertEqual(self._enabled()[key], True)
 
     def test_an_unreadable_registry_refuses_rather_than_guess(self):
-        from agentrc.adapters._components import RenderRefused
+        from stratarc.adapters._components import RenderRefused
 
         (self.target / "plugins" / "installed_plugins.json").write_text("{broken", encoding="utf-8")
         self._stage("chosen")
@@ -889,7 +889,7 @@ class TestPluginEnablement(unittest.TestCase):
             sync(self.source, self.target)
 
     def test_a_parseable_registry_without_a_plugins_object_refuses(self):
-        from agentrc.adapters._components import RenderRefused
+        from stratarc.adapters._components import RenderRefused
 
         self._stage()
         for data in (None, [], {}, {"plugins": None}, {"plugins": []}):
@@ -929,8 +929,8 @@ class TestGlobalColumnAcceptance(unittest.TestCase):
     )
 
     def test_only_the_global_column_loads(self):
-        from agentrc import staging
-        from agentrc.control_plane import ControlPlane
+        from stratarc import staging
+        from stratarc.control_plane import ControlPlane
 
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -942,7 +942,7 @@ class TestGlobalColumnAcceptance(unittest.TestCase):
                 return {"name": name, "runtimes": ["claude"], "owner": "anthropic", "wanted": True, "marketplace": "m"}
 
             def server(name):
-                return {"name": name, "runtimes": ["claude"], "owner": "agentrc", "wanted": True, "command": name}
+                return {"name": name, "runtimes": ["claude"], "owner": "stratarc", "wanted": True, "command": name}
 
             (root / "components.json").write_text(
                 json.dumps(

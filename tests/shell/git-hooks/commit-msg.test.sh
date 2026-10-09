@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Behavioral tests for agentrc/data/git-hooks/commit-msg.
+# Behavioral tests for stratarc/data/git-hooks/commit-msg.
 #
 # strip-commit-attribution.test.sh exercises strip-commit-attribution.sh
 # directly and never runs the commit-msg wrapper that forwards $1 to it. Two
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agentrc/data/git-hooks" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../stratarc/data/git-hooks" && pwd)"
 HOOK="$SCRIPT_DIR/commit-msg"
 
 AGENT="Cla""ude"
@@ -62,7 +62,7 @@ rm -f "$clean"
 # When strip-commit-attribution.sh is not present beside the wrapper's own
 # repository root, the wrapper fails closed with its documented message
 # rather than silently letting an unjudged commit through. A throwaway git
-# repository with no agentrc/data/git-hooks/ tree stands in for the missing
+# repository with no stratarc/data/git-hooks/ tree stands in for the missing
 # sibling, isolated from this checkout's real script.
 TEMP_ROOT="$(mktemp -d -t commit-msg-test-repo.XXXXXXXXXX)"
 git init -q "$TEMP_ROOT"
