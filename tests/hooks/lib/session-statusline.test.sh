@@ -295,6 +295,18 @@ rm -f "$AG_CACHE" "$AG_CACHE.refresh" "$AG_RUNS"
 OUT="$(run_line "$(payload_with_transcript)" AGENT_GRAPH_ROOT="$AG")"
 [ "$OUT" = "$BASE" ] && ok || bad "a missing cache adds no segment" "got: $OUT"
 wait_for_runs 1 && ok || bad "a missing cache starts a refresh" "no run recorded"
+# The stub logs its run before it writes the cache; wait for the write so a late rename
+# cannot replace the cache the next case sets up.
+wait_for_cache() {
+  local n=0
+  while [ "$n" -lt 50 ]; do
+    [ -f "$AG_CACHE" ] && return 0
+    sleep 0.1
+    n=$((n + 1))
+  done
+  return 1
+}
+wait_for_cache && ok || bad "the refresh writes the cache" "no cache written"
 
 # A cache that is not a plain integer adds nothing.
 printf 'agent-graph: offline' > "$AG_CACHE"
