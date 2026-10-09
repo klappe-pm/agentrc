@@ -1,13 +1,7 @@
 # expected
 
-The rendered runtime output a sync of `../source` produces, one directory per runtime plus `project/notes-cli/` for the managed project, assuming the source root lives at `~/stratarc-source`; replace a file with golden output once the engine lands.
+The rendered runtime output a sync of `../source` produces, one directory per runtime plus `project/notes-cli/` for the managed project. The source root lives at `~/stratarc-source` and the checkout at `~/projects/active/notes-cli`. `tests/test_examples.py` runs `stratarc sync` on a copy of `../source` in a temporary home and requires every file here to match the output byte for byte.
 
-Structural approximations, to be replaced by golden output when the engine lands:
+`<home>` in `codex/config.toml` stands for the home directory the sync ran under, which the engine writes into the project trust table.
 
-- Every instruction file (`AGENTS.md`, `CLAUDE.md`, `CODEX.md`, `GEMINI.md`, and the project copies): the rule binding text and the `Full rule:` pointers are exact, but the digest heading, its introductory sentence and the marker comment wording are approximated.
-- `codex/config.toml`: carries only the keys derived from `permissions.json`; the profile name `stratarc`, its marker comments and the per-repository trust tables are left to the engine.
-- `codex/rules/stratarc.rules` and `gemini/policies/stratarc-permissions.toml`: the contents follow the permission translation, but the file names are approximated.
-- `gemini/settings.json`: the hook matcher is written as the source spells it, and whether the engine translates it to a Gemini tool name is not derived.
-- `opencode/`: the plugin that bridges OpenCode events to `hooks/block-database-commits.sh` ships with the engine and is not shown, so the copied script is not yet registered.
-- `cursor/`: no `rules/` directory, because Cursor receives rules only from a fixed list of required user rules that this example does not define.
-- `project/notes-cli/.claude/settings.json`: how a project `permissions.json` is delivered is not derived; the file shows the policy rendered whole, without `defaultMode`.
+A sync also writes files that are not kept here: the guard libraries under `hooks/lib/`, the project's `.claude/hooks/` and `.github/` templates, the project's `.docs/` snapshot of the control plane, the OpenCode plugin `plugins/stratarc-hooks.ts`, and the per-target `.stratarc-deploy.json` and `stratarc-delivered.json` stamps. They come from the engine's package data or record times and absolute paths, and the test lists them in `ENGINE_OWNED`.

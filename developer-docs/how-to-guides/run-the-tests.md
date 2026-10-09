@@ -12,11 +12,15 @@ Tests live under `tests/` and read only fixtures under `tests/fixtures/`, never 
 
 ## the-slow-marker
 
-One test is marked `slow`: it builds a wheel from the checkout, installs it into a fresh virtual environment and runs the installed `stratarc init` outside the checkout, checking that the result matches the bundled template byte for byte. It is the test that proves the package data ships correctly; see [package data](../reference/package-data.md). Skip it while iterating and run it before you commit:
+One test is marked `slow`: it builds a wheel from the checkout, installs it into a fresh virtual environment and runs the installed `stratarc init` outside the checkout, checking that the result matches the bundled template byte for byte. It then runs `stratarc sync --dry-run` and `stratarc --json doctor` against that scaffold under a temporary `HOME`, checking that nothing is written. It is the test that proves the package data and the adapters ship correctly; see [package data](../reference/package-data.md). Skip it while iterating and run it before you commit:
 
 ```bash
 python3 -m pytest -m 'not slow'
 ```
+
+## the-golden-example
+
+`tests/test_examples.py` runs `stratarc diff`, `sync` and `check` on a copy of `examples/notes-cli/source` in a temporary home and compares what `sync` wrote with `examples/notes-cli/expected`, byte for byte. In the expected files `<home>` stands for the temporary home path. A sync also writes guard libraries, CI templates, the OpenCode plugin and per-target stamp files that `expected/` does not hold; the `ENGINE_OWNED` pattern in the test lists them. When an adapter or the engine changes what a sync writes, the test names the files that differ; update them from the output of a sync in a throwaway home, as the [example](../../examples/notes-cli/README.md) describes.
 
 ## shellcheck
 

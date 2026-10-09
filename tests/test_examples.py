@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
 import pytest
 
+from conftest import tree_snapshot
+from stratarc.cli import main
 from tests.test_schemas import describe, validator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -175,3 +179,122 @@ def test_no_session_link_anywhere_in_examples() -> None:
         if SESSION_LINK.search(p.read_text(encoding="utf-8", errors="replace"))
     ]
     assert not hits, f"session link in: {hits}"
+
+
+# ----- golden output: the engine renders source/ into expected/ -----
+
+# Where each directory under expected/ lands below the home.
+DEPLOYED = {
+    "claude": ".claude",
+    "codex": ".codex",
+    "gemini": ".gemini",
+    "cursor": ".cursor",
+    "opencode": ".config/opencode",
+    "project/notes-cli": "projects/active/notes-cli",
+}
+
+# The placeholder expected/ files use for the home path, which differs on every run.
+HOME_PLACEHOLDER = b"<home>"
+
+# What a sync writes that expected/ does not hold. Guard libraries, CI templates and the
+# OpenCode plugin are engine package data (tests/test_adapters_*.py and the package data
+# checks cover them); the stamp and ledger files record times and absolute paths; the
+# project's .docs/ snapshot of the control plane is under a gitignored directory name.
+ENGINE_OWNED = re.compile(
+    r"(^|/)(\.stratarc-deploy\.json|stratarc-delivered\.json)$"
+    r"|(^|/)hooks/lib/"
+    r"|^project/notes-cli/\.claude/hooks/"
+    r"|^project/notes-cli/\.github/"
+    r"|^project/notes-cli/\.docs/"
+    r"|^opencode/plugins/stratarc-hooks\.ts$"
+)
+
+
+def deploy_example(home: Path) -> Path:
+    """Lay out a home the way expected/README.md describes: one empty directory per runtime, a
+    managed checkout whose origin belongs to the example owner, and the example source root."""
+    for directory in DEPLOYED.values():
+        if directory != "projects/active/notes-cli":
+            (home / directory).mkdir(parents=True, exist_ok=True)
+    checkout = home / "projects" / "active" / "notes-cli"
+    checkout.mkdir(parents=True)
+    subprocess.run(["git", "-C", str(checkout), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(checkout), "remote", "add", "origin", "https://github.com/example-owner/notes-cli.git"],
+        check=True,
+    )
+    source = home / "stratarc-source"
+    shutil.copytree(SOURCE, source)
+    return source
+
+
+def deployed_tree(home: Path) -> dict[str, bytes]:
+    """Every file a sync wrote, keyed the way expected/ is laid out."""
+    tree: dict[str, bytes] = {}
+    for name, directory in DEPLOYED.items():
+        base = home / directory
+        for path in sorted(base.rglob("*")):
+            if path.is_file() and ".git" not in path.relative_to(base).parts:
+                tree[f"{name}/{path.relative_to(base).as_posix()}"] = path.read_bytes()
+    return tree
+
+
+def expected_tree(home: Path) -> dict[str, bytes]:
+    tree: dict[str, bytes] = {}
+    for name in DEPLOYED:
+        base = EXPECTED / name
+        for path in sorted(base.rglob("*")):
+            if path.is_file():
+                tree[f"{name}/{path.relative_to(base).as_posix()}"] = path.read_bytes().replace(
+                    HOME_PLACEHOLDER, str(home).encode()
+                )
+    return tree
+
+
+@pytest.fixture
+def example_home(stratarc_home: Path) -> tuple[Path, Path]:
+    return stratarc_home, deploy_example(stratarc_home)
+
+
+def run(home: Path, source: Path, *command: str) -> int:
+    return main(["--home", str(home), "--root", str(source), *command])
+
+
+def test_diff_prints_the_plan_and_writes_nothing(example_home, capsys) -> None:
+    home, source = example_home
+    before = tree_snapshot(home)
+
+    assert run(home, source, "diff") == 0
+
+    out = capsys.readouterr().out
+    assert "sync: claude" in out and "would" in out
+    assert tree_snapshot(home) == before
+
+
+def test_sync_renders_exactly_expected(example_home, capsys) -> None:
+    home, source = example_home
+
+    assert run(home, source, "sync") == 0
+    capsys.readouterr()
+
+    actual = deployed_tree(home)
+    expected = expected_tree(home)
+    missing = sorted(set(expected) - set(actual))
+    assert not missing, f"sync did not write: {missing}"
+    extra = sorted(name for name in set(actual) - set(expected) if not ENGINE_OWNED.search(name))
+    assert not extra, f"sync wrote files expected/ does not hold: {extra}"
+    differing = sorted(name for name in expected if actual[name] != expected[name])
+    assert not differing, f"differs from expected/: {differing}"
+
+
+def test_check_is_clean_after_sync_and_drifts_after_an_edit(example_home, capsys) -> None:
+    home, source = example_home
+    assert run(home, source, "sync") == 0
+    assert run(home, source, "check") == 0
+
+    rule = source / "rules" / "conventional-commit-messages.md"
+    rule.write_text(rule.read_text(encoding="utf-8").replace("`test` or `chore`", "`perf`, `test` or `chore`"), encoding="utf-8")
+
+    assert run(home, source, "check") == 6
+    assert run(home, source, "diff") == 0
+    capsys.readouterr()

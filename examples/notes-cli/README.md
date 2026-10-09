@@ -42,7 +42,7 @@ Each JSON file validates against the schema shipped under `stratarc/data/schema/
 
 ## the-managed-project
 
-A checkout under `projects_root` whose origin belongs to `owner` is a managed project. Here that is `~/projects/notes-cli` with an origin under `example-owner`. It appears as a column in every table of `control-plane.md`, and `projects-root/notes-cli/` holds what is true of that project alone.
+A checkout under `projects_root` whose origin belongs to `owner` is a managed project. Here that is `~/projects/active/notes-cli` with an origin under `example-owner`. It appears as a column in every table of `control-plane.md`, and `projects-root/notes-cli/` holds what is true of that project alone.
 
 | concern | top level | `projects-root/notes-cli/` |
 | --- | --- | --- |
@@ -53,11 +53,11 @@ A checkout under `projects_root` whose origin belongs to `owner` is a managed pr
 | Permissions | `permissions.json` is rendered into each runtime. | `permissions.json` narrows the policy to the checkout and denies the notes database. |
 | Hooks, commands, agents | Deployed at user scope. | Not overridden, so the user scope versions apply. |
 
-The result for a session in `~/projects/notes-cli` is the shared baseline plus the three project additions, with nothing to copy by hand.
+The result for a session in `~/projects/active/notes-cli` is the shared baseline plus the three project additions, with nothing to copy by hand.
 
 ## walkthrough
 
-`stratarc init` works today. `stratarc sync`, `check`, `diff`, `prune` and `reconcile` are placeholders that print `stratarc <name>: not yet extracted` and exit 2 until the engine lands, so each step below describes what the command will do and the page stays true on either side of that change. Run every command from the directory shown.
+Every command below runs today. Run each from the directory shown.
 
 ### 1-stratarc-init
 
@@ -101,7 +101,7 @@ notes-cli/AGENTS.md  notes-cli/CLAUDE.md  notes-cli/CODEX.md  notes-cli/GEMINI.m
 notes-cli/.claude/rules/conventional-commit-messages.md
 ```
 
-That listing is illustrative; the engine fixes the real format.
+That listing is illustrative; run the command for the real output.
 
 ### 4-stratarc-diff
 
@@ -116,7 +116,7 @@ cd ~/stratarc-source && stratarc diff
 +Write each commit subject as `type(scope): summary`, using `feat`, `fix`, `docs`, `refactor`, `perf`, `test` or `chore` as the type. Keep the summary lowercase, imperative and under 72 characters. Put the reason for the change in the body, not the subject.
 ```
 
-That diff is illustrative too; the engine fixes the real format.
+That diff is illustrative too; run the command for the real output.
 
 ### 5-stratarc-sync
 
@@ -188,7 +188,7 @@ The same source becomes five different layouts, because each runtime reads its o
   commands/test-summary.md       argument-hint and allowed-tools dropped
   agents/diff-reviewer.md        mode subagent, tools not listed are denied
 
-~/projects/notes-cli/            the managed project
+~/projects/active/notes-cli/            the managed project
   AGENTS.md CLAUDE.md CODEX.md GEMINI.md
   .claude/rules/                 two shared rules as binding sections, one shared and one local rule whole
   .claude/skills/write-changelog-entry/SKILL.md
@@ -232,7 +232,7 @@ It touches only paths stratarc owns, such as `commands/` and `prompts/`, so a co
 
 ## expected-output
 
-`expected/` holds the files a sync of `source/` should produce, laid out one directory per runtime: `claude/`, `codex/`, `gemini/`, `cursor/` and `opencode/` are the contents of `~/.claude`, `~/.codex`, `~/.gemini`, `~/.cursor` and `~/.config/opencode`, and `project/notes-cli/` is the contents of `~/projects/notes-cli`.
+`expected/` holds the files a sync of `source/` should produce, laid out one directory per runtime: `claude/`, `codex/`, `gemini/`, `cursor/` and `opencode/` are the contents of `~/.claude`, `~/.codex`, `~/.gemini`, `~/.cursor` and `~/.config/opencode`, and `project/notes-cli/` is the contents of `~/projects/active/notes-cli`.
 
 To compare a real sync, give it a throwaway home so nothing of yours is touched. This assumes the engine expands `~` from `HOME`. Scaffold a checkout whose origin belongs to the example owner:
 
@@ -254,7 +254,7 @@ cd /tmp/stratarc-home/stratarc-source && HOME=/tmp/stratarc-home stratarc sync
 cd <your stratarc checkout> && diff -r /tmp/stratarc-home/.claude examples/notes-cli/expected/claude
 ```
 
-Repeat the last command for `.codex`, `.gemini`, `.cursor`, `.config/opencode` and `projects/notes-cli`, with the matching `expected/` directory. A few files differ until the engine lands because they are structural approximations; `expected/README.md` lists them, and each should be replaced with the real output at that point. Until then the commands above stop at `sync`, which exits 2.
+Repeat the last command for `.codex`, `.gemini`, `.cursor`, `.config/opencode` and `projects/notes-cli`, with the matching `expected/` directory. Every file under `expected/` is real `stratarc sync` output; `expected/README.md` lists the few files a sync writes that it does not hold.
 
 `tests/test_examples.py` guards the example itself. Run it from the root of your checkout:
 
@@ -269,4 +269,4 @@ cd <your stratarc checkout> && python3 -m pytest -q tests/test_examples.py
 - Project-local hooks, commands, agents and skills. `projects-root/notes-cli/` holds an instruction file, a rule and a permission policy, and those directories follow the same formats as the top level.
 - How a project `permissions.json` is delivered. The file is valid and the expected project settings show it rendered whole, but the delivery path is not derived from the engine yet.
 - The OpenCode hook bridge and Cursor's required user rules. Both come from the engine, not from the source root.
-- The engine itself. Everything under `expected/` is derived from how the existing runtime adapters translate each file, and `expected/README.md` marks what is still approximate.
+- Private extensions. A source root can load its own validator checks and project renderers from `scripts/private/`; this example uses none.

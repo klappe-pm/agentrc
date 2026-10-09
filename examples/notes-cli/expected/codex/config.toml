@@ -1,6 +1,23 @@
-approval_policy = "on-request"
-default_permissions = "stratarc"
 
+approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+web_search = "live"
+default_permissions = "stratarc"
+[projects."<home>/projects/active/notes-cli"]
+trust_level = "trusted"
+
+[features]
+memories = false
+
+[memories]
+use_memories = false
+generate_memories = false
+
+[desktop]
+external-agent-import-sync-enabled = false
+
+[history]
+persistence = "save-all"
 # BEGIN stratarc permissions, generated from permissions.json
 [permissions.stratarc]
 extends = ":workspace"

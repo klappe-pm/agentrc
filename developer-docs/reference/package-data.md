@@ -31,7 +31,7 @@ template = data_dir("templates/source-root")
 
 ## how-it-is-tested
 
-`tests/test_wheel_install.py`, marked `slow`, builds a wheel from the checkout, installs it into a fresh virtual environment and runs the installed `stratarc init` with the working directory outside the checkout, so the installed package and not the source tree is imported. It compares the scaffold with the template byte for byte. `tests/test_cli.py` checks the same copy from the checkout. Together they catch an asset that was added to the tree but not to the distribution, and a reader that works only when `data/` is a real directory.
+`tests/test_wheel_install.py`, marked `slow`, builds a wheel from the checkout, installs it into a fresh virtual environment and runs the installed `stratarc init` with the working directory outside the checkout, so the installed package and not the source tree is imported. It compares the scaffold with the template byte for byte, then runs `stratarc sync --dry-run` and `stratarc --json doctor` on the scaffold under a temporary `HOME`, which reads the adapters and the schemas from the wheel. `tests/test_cli.py` checks the same copy from the checkout. Together they catch an asset that was added to the tree but not to the distribution, and a reader that works only when `data/` is a real directory.
 
 ## adding-an-asset
 

@@ -1,7 +1,6 @@
 # source-layout
 
-This page describes the source root that `stratarc init` creates: each file and directory, what it holds, and which runtimes consume it. It is the reference for a contributor changing the template under `stratarc/data/templates/source-root/` or the code that reads a source root. The user-facing description of the same files is in [configuration](../../docs/reference/configuration.md). It is completed as the engine that reads each part is extracted.
-
+This page describes the source root that `stratarc init` creates: each file and directory, what it holds, and which runtimes consume it. It is the reference for a contributor changing the template under `stratarc/data/templates/source-root/` or the code that reads a source root. The user-facing description of the same files is in [configuration](../../docs/reference/configuration.md).
 ## files
 
 | path | holds | read by |
@@ -14,7 +13,7 @@ This page describes the source root that `stratarc init` creates: each file and 
 
 ## where-configuration-is-read
 
-`stratarc/paths.py` and `stratarc/config.py` are the only modules that read `STRATARC_HOME`, `STRATARC_SOURCE`, `LLM_ROOT_PROJECTS_DIR`, `STRATARC_GITHUB_OWNER` and `stratarc.toml`; every other module asks them. The home is `STRATARC_HOME`, then `HOME`, then the platform home. The source root is an explicit argument, then `STRATARC_SOURCE`, then the nearest directory at or above the current directory that holds `stratarc.toml`, then the current directory. The projects root is `LLM_ROOT_PROJECTS_DIR`, then `<home>/projects/active`. The owner is `STRATARC_GITHUB_OWNER`, then `owner` in `stratarc.toml`, then empty. All of it is read when called, never at import.
+`stratarc/paths.py` and `stratarc/config.py` are the only modules that read `STRATARC_HOME`, `STRATARC_SOURCE`, `LLM_ROOT_PROJECTS_DIR`, `STRATARC_GITHUB_OWNER` and `stratarc.toml`; every other module asks them. The home is `STRATARC_HOME`, then `HOME`, then the platform home. The source root is an explicit argument, then `STRATARC_SOURCE`, then the nearest directory at or above the current directory that holds `stratarc.toml`, then the current directory. The projects root is `LLM_ROOT_PROJECTS_DIR`, then `<home>/projects/active`. The owner is `STRATARC_GITHUB_OWNER`, then `owner` in `stratarc.toml`, then empty. All of it is read when called, never at import. The command line flags `--root`, `--home`, `--projects-root` and `--owner` set `STRATARC_SOURCE`, `STRATARC_HOME`, `LLM_ROOT_PROJECTS_DIR` and `STRATARC_GITHUB_OWNER` for the length of one command, so a flag wins over the environment and the environment over `stratarc.toml`; `stratarc doctor` prints which of them resolved the source root. The [cli reference](../../docs/reference/cli.md) lists every flag.
 
 ## directories
 

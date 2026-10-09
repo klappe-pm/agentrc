@@ -768,7 +768,7 @@ class Graph:
             for name, node_id in self.capabilities[kind].items():
                 names[name].append(node_id)
         for name, ids in names.items():
-            if len(ids) > 1:
+            if len(ids) > 1 and name != "README":
                 add("error", "duplicate-name", ids[0], f"{name} is defined as {', '.join(ids)}; a bare reference is ambiguous", f"{ids[0]}:1")
         if live:
             findings.extend(self.drift_checks())
