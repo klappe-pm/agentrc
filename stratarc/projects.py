@@ -1657,13 +1657,34 @@ def _render_project_components(
     return managed_plugins, managed_servers
 
 
+class ProjectRefused(Exception):
+    """One project cannot be delivered; the message says why and names the file."""
+
+
+def _read_settings(settings_path: pathlib.Path, name: str) -> dict:
+    """The project's .claude/settings.json, {} when absent; a file that does not parse refuses the project."""
+    if not settings_path.exists():
+        return {}
+    try:
+        return json.loads(settings_path.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ProjectRefused(
+            f"refusing project {name}; {short(settings_path)} is not valid JSON ({error}); "
+            "fix or remove the file and run again; nothing was delivered to this project"
+        ) from error
+
+
 def sync_project(name: str, dry: bool, cp=None) -> list[str]:
     """Sync one project. If a control plane is given, source is a staged view
-    filtered by that project's column; otherwise projects-root/<name>/ raw."""
+    filtered by that project's column; otherwise projects-root/<name>/ raw.
+
+    Raises ProjectRefused, before anything is written, when the project's own
+    .claude/settings.json is not valid JSON."""
     dst, why = resolve(name, cp)
     acts: list[str] = []
     if dst is None:
         return [why]
+    _read_settings(dst / ".claude" / "settings.json", name)
     delivered_path = dst / delivered_manifest()
     previous, hashed = _read_delivered(delivered_path)
     managed_components = _read_managed_components(delivered_path)
@@ -1871,7 +1892,7 @@ def sync_project(name: str, dry: bool, cp=None) -> list[str]:
     # already registers are kept. Either way the carried guard is registered
     # beside them, and every other settings key is preserved.
     settings_path = dst / ".claude" / "settings.json"
-    settings = json.loads(settings_path.read_text()) if settings_path.exists() else {}
+    settings = _read_settings(settings_path, name)
     base = _drop_registrations(
         hooks if hooks is not None else settings.get("hooks") or {},
         claude_hook_prefix,
@@ -2248,9 +2269,15 @@ def main(argv: list[str] | None = None) -> int:
             else sorted(p.name for p in PROJECTS_SRC.iterdir() if p.is_dir())
         )
     stale = False
+    refused = False
     try:
         for n in names:
-            acts = sync_project(n, args.check, cp)
+            try:
+                acts = sync_project(n, args.check, cp)
+            except ProjectRefused as error:
+                print(f"{PROG}: {error}", file=sys.stderr)
+                refused = True
+                continue
             if not acts:
                 print(f"{PROG}: {n}: current")
                 continue
@@ -2261,6 +2288,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {a}")
     finally:
         cleanup_all()
+    if refused:
+        return 2
     return 1 if (args.check and stale) else 0
 
 

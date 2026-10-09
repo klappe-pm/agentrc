@@ -116,6 +116,19 @@ def short(p: pathlib.Path) -> str:
     return str(p).replace(str(home()), "~")
 
 
+def present_action(action: str, stage: pathlib.Path) -> str:
+    """An adapter's action line as the operator reads it: the deployed path, never a staging path.
+
+    A copy line is "<verb> <staged file> -> <deployed file>"; it prints as "<verb> <deployed file>". The home shows as `~`, so the line is the same on every run.
+    """
+    verb, arrow, deployed = action.partition(" -> ")
+    if arrow:
+        for prefix in ("would copy ", "copy "):
+            if verb.startswith(prefix) and verb[len(prefix):].startswith(str(stage)):
+                return prefix + short(pathlib.Path(deployed))
+    return action.replace(str(stage) + os.sep, "").replace(str(home()), "~")
+
+
 def regenerate_derived(root: pathlib.Path | None = None) -> list[str]:
     """Rebuild derived files, returning their status and output.
 
@@ -1082,7 +1095,7 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
                 write_stamp(target, canonical_version, root)
             print(f"sync: {name} ({short(target)}) {head}:")
             for a in actions:
-                print(f"  {a}")
+                print(f"  {present_action(a, stage)}")
 
         # --check's reverse pass, after the forward comparison above.
         # Computed from the same stage the forward pass just used, so a

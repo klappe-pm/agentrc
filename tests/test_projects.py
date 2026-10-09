@@ -2458,6 +2458,29 @@ def test_main_syncs_and_then_reports_current(world, monkeypatch, capsys):
     assert "projects: proj: current" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("flags", [[], ["--check"]])
+def test_main_refuses_a_project_with_malformed_settings_and_continues(world, monkeypatch, capsys, flags):
+    monkeypatch.setattr(projects, "reconcile_main", lambda argv: 0)
+    for name in ("alpha", "beta"):
+        world.source(name)
+        world.checkout(name)
+    broken = write(world.projects / "active" / "alpha" / ".claude" / "settings.json", '{"hooks": ')
+    write(world.root / "control-plane.md", "# control-plane\n")
+
+    code = projects.main(flags)
+
+    captured = capsys.readouterr()
+    assert code == 2, captured
+    assert "Traceback" not in captured.err
+    assert "settings.json" in captured.err and "alpha" in captured.err
+    assert "line 1" in captured.err or "Expecting" in captured.err
+    assert "projects: beta " in captured.out
+    assert broken.read_text() == '{"hooks": '
+    if not flags:
+        assert (world.projects / "active" / "beta" / "AGENTS.md").is_file()
+        assert not (world.projects / "active" / "alpha" / "AGENTS.md").exists()
+
+
 def test_main_with_the_real_reconciler_adds_the_project_to_the_control_plane(world, capsys):
     world.source()
     world.checkout()

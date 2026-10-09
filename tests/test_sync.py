@@ -1538,6 +1538,21 @@ class TestDiff:
         assert tree_snapshot(source) == source_before
         assert tree_snapshot(home) == home_before
 
+    def test_a_diff_names_the_deployed_path_never_a_staging_path(self, layout) -> None:
+        source, home = layout
+        assert run_main("--root", str(source))[0] == 0
+        (home / ".claude" / "AGENTS.md").write_text("edited by hand\n")
+        code, out, err = run_main("--root", str(source), "--diff")
+        assert code == 0, out + err
+        copies = [line.strip() for line in out.splitlines() if line.strip().startswith("would copy")]
+        assert copies, out
+        assert "stratarc-stage" not in out
+        assert str(home) not in out
+        assert "would copy ~/.claude/AGENTS.md" in out
+        assert all("->" not in line for line in copies)
+        again = run_main("--root", str(source), "--diff")[1]
+        assert again == out
+
     def test_a_diff_of_a_deployed_tree_reports_it_current(self, layout) -> None:
         source, home = layout
         code, out, err = run_main("--root", str(source))

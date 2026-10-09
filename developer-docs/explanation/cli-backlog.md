@@ -21,9 +21,7 @@ The engine commands (`sync`, `check`, `diff`, `prune`, `reconcile`, `validate`, 
 
 ## known-defects
 
-- A project's malformed `.claude/settings.json` makes `stratarc projects` stop with a raw `JSONDecodeError` traceback (`stratarc/projects.py`, where the file is read in `sync_project`). It should refuse that one project with the file path and the parse error, using the error-message catalog, and continue with the others. The plugin ingest already withholds in that case, so the failure is in the project render only.
-
-- `stratarc diff` prints temporary staging paths (`.../stratarc-stage-global-xxxx/AGENTS.md`) in its "would copy" lines. It should print the deployed destination path, so the output is stable and readable. The fix is in the engine's diff output, not the command line.
+None recorded.
 
 ## open-questions
 
