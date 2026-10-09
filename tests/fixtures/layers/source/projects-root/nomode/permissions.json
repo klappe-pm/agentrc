@@ -1,0 +1,5 @@
+{
+  "network": {
+    "allow": ["other.example.com"]
+  }
+}
