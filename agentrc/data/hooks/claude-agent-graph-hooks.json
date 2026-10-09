@@ -1,0 +1,25 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/agent-graph-session-start.sh",
+          "timeout": 20
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Edit|Write",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/agent-graph-pre-edit.sh",
+          "timeout": 8
+        }
+      ]
+    }
+  ]
+}

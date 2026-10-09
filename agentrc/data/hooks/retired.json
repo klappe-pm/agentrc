@@ -1,0 +1,15 @@
+{
+  "$comment": "Hook file names the engine once shipped under hooks/ and has since renamed or removed, relative to hooks/ (e.g. \"lib/git-event.sh\"). sync-projects.py prunes these from every active checkout's .claude/hooks/ and .codex/hooks/, and drops any stale registration of them from .claude/settings.json and .codex/hooks.json. Append a name here whenever a hook file is renamed or removed; never remove an entry.",
+  "retired": [
+    "autosave.sh",
+    "check-documentation-indexes.sh",
+    "document-script.sh",
+    "lib/git-event.sh",
+    "lib/session-registry.sh",
+    "no-emdash-guard.sh",
+    "no-hardwrap-guard.sh",
+    "regen-surfaces.sh",
+    "session-sync.sh",
+    "worktree-hydrate.sh"
+  ]
+}

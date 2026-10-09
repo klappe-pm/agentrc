@@ -1,10 +1,10 @@
-# Attribution check for pull requests and pushes: scans the pull request
-# title, body and commit messages, or each pushed commit message, with the
-# same detector the local guard and commit-msg backstop use.
+# Attribution check for pull requests and pushes. Source: data/ci/attribution-check.yml
+# in the agentrc package, rendered into each managed project by agentrc; edit the source.
 #
-# No comment event may ever run this workflow. A job skipped by an if: still
-# reports its check, and a skipped check satisfies a required one. An old
-# comment cannot be edited away, so it never blocks.
+# Comments are checked by attribution-check-comment.yml, a separate workflow
+# with its own check name. A job skipped by an if: still reports its check,
+# and a skipped check satisfies a required one, so no comment event may ever
+# run this workflow. An old comment cannot be edited away, so it never blocks.
 name: attribution-check
 
 on:
@@ -31,7 +31,7 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER/commits" --paginate --jq '.[] | {sha: .sha, message: .commit.message}' > "$RUNNER_TEMP/commits.jsonl"
-            python3 agentrc/data/ci/attribution-check.py --commits "$RUNNER_TEMP/commits.jsonl"
+            python3 scripts/ci/attribution-check.py --commits "$RUNNER_TEMP/commits.jsonl"
           else
-            python3 agentrc/data/ci/attribution-check.py
+            python3 scripts/ci/attribution-check.py
           fi

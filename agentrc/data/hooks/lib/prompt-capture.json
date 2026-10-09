@@ -1,0 +1,22 @@
+{
+  "$comment": "Category table for hooks/lib/prompt-capture.py, resolved next to that file wherever an adapter deploys it. Each category lists lowercase keywords or phrases; the category with the highest weighted keyword hit count wins, ties go to the earliest entry, and a prompt with no hits lands in `uncategorized`. Edit this file, not the script, to change routing.",
+  "schema_version": 1,
+  "min_prompt_chars": 20,
+  "related_limit": 5,
+  "related_threshold": 0.12,
+  "skip_prefixes": ["/pass", "/pickup", "/clear", "/help", "/compact", "/goal clear"],
+  "categories": [
+    {"name": "debugging", "keywords": ["bug", "error", "fails", "failing", "broken", "traceback", "stack trace", "root cause", "regression", "crash", "not working", "why does", "fix"]},
+    {"name": "code-review", "keywords": ["review", "code review", "pr review", "look over", "critique", "audit the diff", "lint"]},
+    {"name": "git-and-shipping", "keywords": ["commit", "push", "pull request", "open a pr", "merge", "rebase", "branch", "worktree", "release", "tag"]},
+    {"name": "testing", "keywords": ["test", "tests", "unit test", "integration test", "coverage", "assert", "fixture", "make test"]},
+    {"name": "planning", "keywords": ["plan", "roadmap", "milestone", "phase", "scope", "spec", "design doc", "prd", "strategy", "prioritize", "rice"]},
+    {"name": "research", "keywords": ["research", "compare", "are there projects", "what are the options", "survey", "investigate", "find out", "look up", "search the web"]},
+    {"name": "documentation", "keywords": ["document", "docs", "readme", "write up", "passoff", "changelog", "explain", "describe", "summarize"]},
+    {"name": "data-and-analysis", "keywords": ["sql", "sqlite", "query", "dataset", "csv", "analyze", "analysis", "metrics", "experiment", "statistics", "chart"]},
+    {"name": "harness-and-hooks", "keywords": ["hook", "hooks", "settings.json", "skill", "agent", "command", "claude code", "codex", "runtime", "mcp"]},
+    {"name": "refactoring", "keywords": ["refactor", "clean up", "simplify", "rename", "extract", "reorganize", "dedupe", "restructure"]},
+    {"name": "feature-work", "keywords": ["implement", "build", "add", "create", "feature", "support for", "wire up", "integrate", "generate"]},
+    {"name": "questions", "keywords": ["what is", "how do", "how does", "should i", "do you think", "is it possible", "can you explain", "?"]}
+  ]
+}

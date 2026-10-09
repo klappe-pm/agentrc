@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# pre-commit policy gates. Activated through core.hooksPath by install.sh.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+for check in check-staged-prose.sh check-staged-secrets.sh; do
+  path="$SCRIPT_DIR/$check"
+  if [ ! -x "$path" ]; then
+    printf 'pre-commit: required check is unavailable: %s\n' "$path" >&2
+    exit 1
+  fi
+  "$path"
+done

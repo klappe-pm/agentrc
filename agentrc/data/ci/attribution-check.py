@@ -287,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"::error title=attribution-check::{hit}")
     if hits:
         print(
-            f"attribution-check: {len(hits)} hit(s); see rules/no-agent-attribution.md"
+            f"attribution-check: {len(hits)} hit(s); see the no-agent-attribution rule"
         )
         return 1
     print(f"attribution-check: {args.event_name} clean")

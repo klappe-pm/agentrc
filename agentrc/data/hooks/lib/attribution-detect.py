@@ -4,18 +4,20 @@
 Backs the no-agent-attribution rule. Runtime system prompts routinely append
 authorship credit to commit messages, pull request bodies, and file footers:
 a co-author trailer naming a model, a "generated with" line, a session
-permalink, a robot emoji byline. The rule is that authored output carries no
-agent attribution, so this module is the single detection implementation
-behind every enforcement point:
+permalink, a robot emoji byline. The user's standing rule is that authored
+output carries no agent attribution, so this module is the single detection
+implementation behind every enforcement point:
 
-  * a PreToolUse guard hook, which denies a write, an authoring shell
-    command, or a GitHub MCP call whose text carries attribution before it
-    lands (an Edit is judged in the file it lands in, a shell command with
-    every body file it names);
-  * the git commit-msg backstop git-hooks/strip-commit-attribution.sh, which
-    silently strips the offending lines out of a commit message written
+  * the PreToolUse guard hooks/no-attribution-guard.sh, which denies a write,
+    an authoring shell command, or a GitHub MCP call whose text carries
+    attribution before it lands (an Edit is judged in the file it lands in,
+    a shell command with every body file it names), and the carried copy of
+    that guard the project sync deploys into each managed project;
+  * the git commit-msg backstop scripts/git-hooks/strip-commit-attribution.sh,
+    which silently strips the offending lines out of a commit message written
     directly with plain git (bypassing the runtime) at commit time;
-  * the server check scripts/ci/attribution-check.py.
+  * the server check scripts/ci/attribution-check.py, the handoff check in
+    hooks/require-pr-on-stop.sh, and the delivery script.
 
 Keeping one detector means those paths can never drift.
 
@@ -75,18 +77,20 @@ _LINE_START = r"(?:^|[\"'`])[ \t>*_-]*"
 # for removal, which is the shape attribution always takes.
 # A repository content path (an issue, a pull request, a release, a
 # documentation page, and the other paths a citation legitimately links to)
-# is not a product landing page, even under a vendor's own org on GitHub. An
-# earlier form denied a descriptive citation of a GitHub issue in the vendor's
-# own repository, because its URL check only looked for the vendor's name
-# anywhere in the link, not at whether the link pointed at repository content.
+# is not a product landing page, even under a vendor's own org on GitHub.
+# The unnarrowed agent-product-link pattern denied a descriptive citation of
+# a GitHub issue in the vendor's own repository, because its
+# URL check only looked for the vendor's name anywhere in the link, not at
+# whether the link actually pointed at repository content.
 _REPO_CONTENT_PATH = (
     r"(?:issues|pull|pulls|releases|blob|tree|wiki|discussions|commit|compare|docs)/"
 )
 
 # A product link points at the vendor, so the link's host decides, not a
-# vendor word anywhere in the URL. An earlier form denied `## sources`
-# citations of third-party pages (a press release, an analyst article) whose
-# paths carried the product's name. A link denies only when its host is a vendor domain or subdomain
+# vendor word anywhere in the URL. An earlier form
+# denied `## sources` citations of third-party pages (a nasdaq.com press
+# release, a constellationr.com article) whose paths carried the product's
+# name. A link denies only when its host is a vendor domain or subdomain
 # (the vendor word as a whole domain label, then the top-level domain and the
 # end of the host), or when it is on github.com and names the vendor outside
 # a repository content path. Userinfo before the host is skipped, so it does
@@ -105,14 +109,13 @@ _GITHUB_VENDOR_URL = (
 # (". ", ", ", "; "), or opens a bracket, quote or separator, with at most a
 # few marks (an emoji, markdown emphasis) in front. A technical mention
 # inside a sentence ("parse config files created by <tool>", "an adapter
-# built with <SDK>") is none of these and is not attribution (an earlier form
-# denied both).
+# built with <SDK>") is none of these and is not attribution (both were once denied).
 _FOOTER_OPENING = r"(?:^|(?<=[.!?,;])[ \t]+|[(\[\"'`|])[^A-Za-z0-9\n]{0,8}?"
 
 # In a trailer the agent is named in the name part: an address inside <...>
 # is not a name, and neither is a word inside an address, so a person's
-# address at a vendor's domain is not a trailer naming the vendor. A vendor
-# noreply address is still denied by its own form.
+# address at a vendor's domain is not a trailer naming the vendor (PR 294
+# review, P2). A vendor noreply address is still denied by its own form.
 _TRAILER_NAME = re.compile(r"(?<![@.])" + _AGENT, re.IGNORECASE)
 
 
@@ -211,10 +214,12 @@ _COMPILED = tuple(
 )
 
 # The one place a session link is metadata rather than credit: the
-# `session-link:` frontmatter key that a private source root may require on
-# agent-written docs files (the provenance exception of the no-agent-
-# attribution rule). A public repository turns it off. The exception covers the frontmatter of a
-# Markdown file under a docs/ directory and nothing else, so it is decided on
+# `session-link:` frontmatter key that the docs-provenance-frontmatter rule
+# requires on agent-written docs files (the provenance-exception section of
+# the no-agent-attribution rule). The exception covers the frontmatter of a
+# Markdown file under a docs/ directory (or a .docs/ directory, where a
+# project keeps internal work product, or a developer-docs/ directory, where
+# an extracted public repository keeps its own) and nothing else, so it is decided on
 # the payload path, where the target file is known: detect_in_payload exempts
 # the session-permalink form on such a line of a Write or Edit to such a file.
 # Bare text (a commit message, a pull request body, a handoff comment) is
@@ -222,22 +227,26 @@ _COMPILED = tuple(
 # knows better asks it to. strip() never honours it: it runs on commit
 # messages, which never legitimately carry the key.
 #
-# An earlier detect() exempted every such line by
+# 2026-09-23, review cluster F2: detect() used to exempt every such line by
 # default, so the commit-msg backstop (which gates strip on detect) let a
 # `session-link:` permalink through a plain git commit, and the guard let one
 # through a gh pr body, an MCP message, and a handoff comment.
 _PROVENANCE_LINE = re.compile(r"^[ \t]*session-link:", re.IGNORECASE)
 _PROVENANCE_EXEMPT = frozenset({"session-permalink"})
+_DOCS_SEGMENTS = frozenset({"docs", ".docs", "developer-docs"})
 _SESSION_PERMALINK = next(
     pattern for label, pattern in _COMPILED if label == "session-permalink"
 )
 
 
 def _docs_markdown_path(path):
-    """True for a Markdown file under a docs/ directory, empty segments aside.
+    """True for a Markdown file under a docs/, .docs/ or developer-docs/
+    directory, empty segments aside. .docs/ holds internal work product
+    (ADR-0003) and carries the same provenance frontmatter as docs/.
 
     Split rather than matched: the regex this replaces nested a repeat and
-    went quadratic on a path of many slashes.
+    went quadratic on a path of many slashes. The segment is matched whole:
+    mydocs/, .docsx/ and developer-docs-old/ are not docs directories.
     """
     parts = path.lower().split("/")
     if len(parts[-1]) <= len(".md") or not parts[-1].endswith(".md"):
@@ -245,7 +254,7 @@ def _docs_markdown_path(path):
     last_empty = max(
         (index for index, part in enumerate(parts) if not part), default=-1
     )
-    return "docs" in parts[last_empty + 1 : -1]
+    return any(part in _DOCS_SEGMENTS for part in parts[last_empty + 1 : -1])
 
 
 def _without_provenance_lines(text):
@@ -284,6 +293,179 @@ def _without_frontmatter_provenance(document):
 def _docs_markdown_target(tool_input):
     path = tool_input.get("file_path")
     return isinstance(path, str) and _docs_markdown_path(path)
+
+
+# The exemption is off in a public repository (the public-repository section
+# of the no-agent-attribution rule): a session link in a published tree is
+# a link to the agent transcript whoever reads it as metadata. A checkout is
+# public when the environment says so (AGENTRC_PUBLIC=1) or when it is listed
+# in <source root>/projects-root/public-targets.json by its directory name,
+# its main worktree's directory name or its origin's owner/repo slug. That
+# file and that identity are what hooks/lib/public-targets.py defines; the
+# logic is reimplemented here rather than imported because a carried copy
+# of this guard ships this file alone, and the public-targets tests hold the
+# two to the same answers. The source root is AGENTRC_SOURCE when set, else
+# LLM_ROOT, else none, as hooks/lib/prompt-capture.py resolves it. A missing
+# list names nobody, so the exemption then holds as before. A list that exists and
+# cannot be read fails closed: the exemption is off everywhere until the
+# file is fixed, the same refusal the reconciler and the project sync make.
+_PUBLIC_VARIABLE = "AGENTRC_PUBLIC"
+_SOURCE_VARIABLES = ("AGENTRC_SOURCE", "LLM_ROOT")
+_GITHUB_ORIGINS = (
+    re.compile(r"https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?"),
+    re.compile(r"git@github\.com:([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?"),
+    re.compile(r"ssh://git@github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?"),
+)
+
+
+def _source_root():
+    """AGENTRC_SOURCE, else LLM_ROOT, else "" (no file-location fallback)."""
+    for name in _SOURCE_VARIABLES:
+        override = os.environ.get(name, "")
+        if override:
+            return os.path.expanduser(override)
+    return ""
+
+
+def _public_targets():
+    """The entries of the public-target list: a frozenset, or None when the
+    file exists and cannot be read or has another shape (a missing file is
+    the empty frozenset). Mirrors load_public_targets in public-targets.py."""
+    root = _source_root()
+    if not root:
+        return frozenset()
+    path = os.path.join(root, "projects-root", "public-targets.json")
+    if not os.path.isfile(path):
+        return frozenset()
+    try:
+        with open(path, encoding="utf-8") as handle:
+            document = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    entries = document.get("targets") if isinstance(document, dict) else document
+    if not isinstance(entries, list) or not all(
+        isinstance(entry, str) and entry.strip() for entry in entries
+    ):
+        return None
+    return frozenset(entry.strip() for entry in entries)
+
+
+def _git_toplevel(path, cwd):
+    """The nearest ancestor of path holding a .git entry (a directory, or
+    the file a linked worktree carries), else None. Walked rather than asked
+    of git: the file may not exist yet, the hook runs under a timeout, and
+    a path of many segments is still linear."""
+    if "\0" in path:
+        return None
+    current = os.path.normpath(path if os.path.isabs(path) else os.path.join(cwd, path))
+    while True:
+        parent = os.path.dirname(current)
+        if parent == current:
+            return None
+        if os.path.exists(os.path.join(parent, ".git")):
+            return parent
+        current = parent
+
+
+def _git_common_dir(toplevel):
+    """The shared .git directory of the checkout at toplevel, else None.
+    Mirrors git_common_dir in public-targets.py: a .git directory is its own
+    common directory; a linked worktree's .git file names its gitdir, whose
+    commondir file names the shared one."""
+    entry = os.path.join(toplevel, ".git")
+    if os.path.isdir(entry):
+        gitdir = entry
+    elif os.path.isfile(entry):
+        try:
+            with open(entry, encoding="utf-8") as handle:
+                first = handle.read().splitlines()[0]
+        except (OSError, ValueError, IndexError):
+            return None
+        if not first.startswith("gitdir:"):
+            return None
+        gitdir = os.path.normpath(
+            os.path.join(toplevel, first[len("gitdir:") :].strip())
+        )
+    else:
+        return None
+    common = os.path.join(gitdir, "commondir")
+    if os.path.isfile(common):
+        try:
+            with open(common, encoding="utf-8") as handle:
+                relative = handle.read().strip()
+        except (OSError, ValueError):
+            return None
+        if relative:
+            gitdir = os.path.normpath(os.path.join(gitdir, relative))
+    return gitdir
+
+
+def _origin_slug(common_dir):
+    """owner/repo from the origin url in <common dir>/config when the origin
+    is on GitHub, else None. Mirrors origin_url and origin_slug in
+    public-targets.py."""
+    try:
+        with open(os.path.join(common_dir, "config"), encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except (OSError, ValueError):
+        return None
+    in_origin = False
+    url = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_origin = (
+                re.fullmatch(r'\[\s*remote\s+"origin"\s*\]', stripped) is not None
+            )
+            continue
+        if in_origin and "=" in stripped:
+            key, value = (part.strip() for part in stripped.split("=", 1))
+            if key == "url":
+                url = value
+                break
+    if url is None:
+        return None
+    for pattern in _GITHUB_ORIGINS:
+        match = pattern.fullmatch(url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _checkout_is_public(toplevel, targets):
+    """True when the checkout at toplevel is listed in targets by its own
+    directory name, its main worktree's directory name or its origin slug.
+    Mirrors is_public_checkout in public-targets.py."""
+    if not targets:
+        return False
+    names = {os.path.basename(toplevel)}
+    common = _git_common_dir(toplevel)
+    slug = None
+    if common is not None:
+        if os.path.basename(common) == ".git":
+            names.add(os.path.basename(os.path.dirname(common)))
+        slug = _origin_slug(common)
+    if names & targets:
+        return True
+    if slug is None:
+        return False
+    return slug.casefold() in {entry.casefold() for entry in targets if "/" in entry}
+
+
+def _public_checkout(tool_input, cwd):
+    """True when the target file sits in a public repository, or when the
+    public-target list cannot be read (then no checkout is trusted as
+    private)."""
+    if os.environ.get(_PUBLIC_VARIABLE) == "1":
+        return True
+    targets = _public_targets()
+    if targets is None:
+        return True
+    path = tool_input.get("file_path")
+    if not isinstance(path, str):
+        return False
+    toplevel = _git_toplevel(path, cwd)
+    return toplevel is not None and _checkout_is_public(toplevel, targets)
 
 
 def _read_edit_file(file_path):
@@ -355,7 +537,7 @@ def _detect_authored_document(document, authored, exempt_provenance):
     # within a line, and scanning the whole file let one pattern go
     # quadratic on a large file, past the hook's 3 second timeout, which
     # fails open. generated-with may break its line between the verb and
-    # the preposition (roborev job 127), so it alone is also given the
+    # the preposition so it alone is also given the
     # nearest non-blank line on each side.
     for span in _authored_line_spans(document, authored):
         for label, pattern in _COMPILED:
@@ -459,17 +641,18 @@ def _apply_edits(existing, edits):
     return existing, authored
 
 
-def _detect_write(tool_name, tool_input):
+def _detect_write(tool_name, tool_input, cwd):
     """detect() for a file write, judged in the file it lands in.
 
     The replacement text alone is judged first. An Edit or MultiEdit is also
     judged in its target file once it lands, which catches attribution the
     edit completes around existing text; the docs frontmatter exception is
-    applied only there, where the target file is known.
+    applied only there, where the target file is known, and never in a
+    public checkout. cwd resolves a relative file_path.
     """
     text = "\n".join(_strings(tool_input, _WRITE_FIELDS))
     label = detect(text)
-    docs = _docs_markdown_target(tool_input)
+    docs = _docs_markdown_target(tool_input) and not _public_checkout(tool_input, cwd)
     provenance_only = label in _PROVENANCE_EXEMPT and docs
     if tool_name == "Write":
         if provenance_only and isinstance(tool_input.get("content"), str):
@@ -527,16 +710,16 @@ _BODY_FILE_LIMIT = 1024 * 1024
 # seen. When a publishing invocation's full message cannot be known (a body
 # built at run time, read from a pipe, or from a file that cannot be read,
 # an alias, xargs), the command is denied as unverifiable rather than passed
-# unchecked. An adversarial review found 31 shapes that the regex prepass
-# this replaces let publish.
+# unchecked. An adversarial review found 31 shapes the regex
+# prepass this replaces let attribution publish.
 # ---------------------------------------------------------------------------
 
 _UNVERIFIABLE = "unverifiable-body"
 
 # gh verbs that only read. Any other verb on pr, issue, release, or gist
 # (create, edit, comment, review, merge, close, and the rest) publishes.
-# An earlier form treated every gh pr, gh issue, and gh api call as
-# publishing, so searching issues for an attribution string was
+# An earlier form treated every gh pr, gh issue, and gh api call was
+# treated as publishing, so searching issues for an attribution string was
 # denied although nothing was published.
 _GH_READ_VERBS = frozenset(
     {"list", "ls", "view", "status", "diff", "checks", "checkout", "download"}
@@ -2433,8 +2616,9 @@ def detect_in_payload(payload):
 
     Write, Edit, and NotebookEdit are scanned on their authored-text fields;
     a `session-link:` line is exempt from the session-permalink form only in
-    a Write or Edit to a Markdown file under docs/, and only when the line
-    sits inside that file's leading frontmatter once the write lands.
+    a Write or Edit to a Markdown file under docs/, only when the line sits
+    inside that file's leading frontmatter once the write lands, and never
+    when the file's checkout is public (_public_checkout).
     Bash is judged on what the command publishes: the arguments of each
     git, gh or glab invocation that writes, and every body they name (gh
     --body-file, -F body=@<path>, --field body=@<path>, gh api --input, git
@@ -2454,15 +2638,15 @@ def detect_in_payload(payload):
         return ""
     tool_name = payload.get("tool_name") or ""
 
+    cwd = payload.get("cwd")
+    if not isinstance(cwd, str) or not cwd:
+        cwd = os.getcwd()
     if tool_name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
-        return _detect_write(tool_name, tool_input)
+        return _detect_write(tool_name, tool_input, cwd)
     if tool_name == "Bash":
         command = tool_input.get("command")
         if not isinstance(command, str):
             return ""
-        cwd = payload.get("cwd")
-        if not isinstance(cwd, str) or not cwd:
-            cwd = os.getcwd()
         return _judge_command(command, cwd)
     if tool_name in _LOCAL_TOOLS:
         return ""
@@ -2498,7 +2682,7 @@ def _main(argv):
         return 64
     # Bytes in, bytes out. A commit message in a legacy encoding is not UTF-8,
     # and a text-mode stdin raised UnicodeDecodeError on it, which the
-    # commit-msg backstop read as clean. surrogateescape
+    # commit-msg backstop read as clean (review cluster F2). surrogateescape
     # decodes every byte, so the ASCII attribution forms still match, and
     # strip writes each untouched byte back exactly as it came in.
     text = sys.stdin.buffer.read().decode("utf-8", errors="surrogateescape")

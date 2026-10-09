@@ -44,4 +44,4 @@ Fails on a `models`, `providers` or `session-link` key in the frontmatter of any
 
 ## the-attribution-check
 
-CI also runs `scripts/ci/attribution-check.py` over the pull request title, body and commit messages, and over each pushed commit. It needs a GitHub event payload, so it is not run locally; the `commit-msg` hook under `agentrc/data/git-hooks/` strips the same forms from a commit message before it lands.
+CI also runs `agentrc/data/ci/attribution-check.py` over the pull request title, body and commit messages, and over each pushed commit. It needs a GitHub event payload, so it is not run locally; the `commit-msg` hook under `agentrc/data/git-hooks/` strips the same forms from a commit message before it lands.

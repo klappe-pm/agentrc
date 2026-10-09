@@ -1,6 +1,6 @@
 # package-data
 
-This page describes how the runtime assets under `agentrc/data/` are packaged and resolved, for a contributor adding an asset or changing code that reads one. The assets are the source-root template, the JSON Schemas, the guard libraries and the git hooks. They are read through `importlib.resources`, never through a path built from `__file__` or relative to the repository root, so a checkout and an installed wheel behave identically.
+This page describes how the runtime assets under `agentrc/data/` are packaged and resolved, for a contributor adding an asset or changing code that reads one. The assets are the source-root template, the JSON Schemas, the guard libraries, the git hooks, the CI attribution check and helper executables. They are read through `importlib.resources`, never through a path built from `__file__` or relative to the repository root, so a checkout and an installed wheel behave identically.
 
 ## what-lives-under-data
 
@@ -9,7 +9,9 @@ This page describes how the runtime assets under `agentrc/data/` are packaged an
 | `agentrc/data/templates/source-root/` | the tree `agentrc init` copies into a new source root |
 | `agentrc/data/schema/` | `hooks.schema.json`, `permissions.schema.json` and `components.schema.json`, with a README describing each |
 | `agentrc/data/hooks/lib/` | `guard-utils.sh`, the token-shaped value detector, and `attribution-detect.py`, the attribution detector |
-| `agentrc/data/git-hooks/` | the `commit-msg` hook and `strip-commit-attribution.sh`, which it runs |
+| `agentrc/data/git-hooks/` | the `commit-msg`, `pre-commit` and `post-commit` hooks, `strip-commit-attribution.sh` and the `check-staged-*.sh` checks they run |
+| `agentrc/data/ci/` | `attribution-check.py` and the two workflow templates, `attribution-check.yml` and `attribution-check-comment.yml`, that agentrc renders into a managed project |
+| `agentrc/data/bin/` | helper executables the install script copies onto the user's PATH, currently `caffeinate-shim.sh` |
 
 ## how-code-reaches-an-asset
 

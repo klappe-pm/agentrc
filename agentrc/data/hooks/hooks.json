@@ -1,0 +1,158 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Write|Edit|NotebookEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/prose-guard.sh",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/no-attribution-guard.sh",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/env-dump-guard.sh",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "matcher": "Task|Agent",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/subagent-cap-guard.sh",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/tool-budget-guard.sh",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Write|Edit|NotebookEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash $HOME/.claude/hooks/reconcile-control-plane.sh",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Task|Agent",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/subagent-cap-guard.sh",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/tool-budget-guard.sh",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "PostToolUseFailure": [
+    {
+      "matcher": "Task|Agent",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/subagent-cap-guard.sh",
+          "timeout": 3
+        }
+      ]
+    },
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/tool-budget-guard.sh",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "SubagentStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/subagent-cap-guard.sh",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "SubagentStop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/subagent-cap-guard.sh",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/prompt-capture.sh",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/require-pr-on-stop.sh",
+          "timeout": 10
+        }
+      ]
+    }
+  ],
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/session-start.sh",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}
