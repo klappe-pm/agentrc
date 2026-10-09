@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>stratarc first run</title>
+<style>
+:root { --bg: #ffffff; --fg: #1c2024; --muted: #5b6570; --line: #d9dee3; --code: #f1f3f5; --accent: #0b5cad; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #121519; --fg: #e4e8ec; --muted: #9aa5b1; --line: #2d343b; --code: #1e2429; --accent: #6cb2ff; }
+}
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 36rem; margin: 0 auto; padding: 48px 16px; }
+h1 { margin: 0; font-size: 2.2rem; letter-spacing: 0.02em; }
+p { color: var(--muted); }
+ol { padding-left: 1.4em; }
+li { margin: 14px 0; }
+code { display: inline-block; background: var(--code); padding: 2px 8px; border-radius: 4px; font: 0.95em ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>stratarc</h1>
+<p>One agent configuration source, rendered into every agent runtime. Nothing is read or changed until you say so.</p>
+<ol>
+<li>Create a source root: <code>stratarc init ~/stratarc-source</code></li>
+<li>Check it: <code>stratarc validate --root ~/stratarc-source</code></li>
+<li>Preview the deployment: <code>stratarc sync --dry-run --root ~/stratarc-source</code></li>
+</ol>
+<p><a href="docs/tutorials/getting-started.html">the full tutorial</a> or <a href="index.html">the documentation</a></p>
+</main>
+</body>
+</html>
