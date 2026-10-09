@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "allow": [],
+  "deny": [],
+  "ask": [],
+  "runtimeDirectories": ["~/.claude"]
+}
