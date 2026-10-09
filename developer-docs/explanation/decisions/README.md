@@ -8,7 +8,7 @@ Each record is a file named `YYYY-MM-DD-<short-kebab-title>.md` with these secti
 
 ## records
 
-Every record below is dated 2026-10-09 and was backfilled in one pass after the choices were made, so each carries the alternatives that were weighed then. The alternatives written from the code and the brief rather than from the maintainer's own words are marked for review in their pages. One record, the terminal interface library, is proposed and still open. Two accepted records carry an open point: the `_modes` syntax in explicit list modes, and whether the XDG path should be the primary home in the home layout.
+Every record below is dated 2026-10-09 and was backfilled in one pass after the choices were made, so each carries the alternatives that were weighed then. The alternatives written from the code and the brief rather than from the maintainer's own words are marked for review in their pages. The terminal interface library record was proposed and open; the Textual record supersedes it, and the record stays as written. The two open points in accepted records, the `_modes` syntax in explicit list modes and whether the XDG path should be the primary home, are settled by later records (list modes use a modes table, the home is `.stratarc`); the earlier records are not edited.
 
 Naming and scope:
 
@@ -26,13 +26,18 @@ Source root and deployment:
 - [verify defines drift as a dry run](2026-10-09-verify-defines-drift-as-a-dry-run.md)
 - [sync verifies and rolls back on drift](2026-10-09-sync-verifies-and-rolls-back-on-drift.md)
 - [sync records changes at its write points](2026-10-09-sync-records-changes-at-its-write-points.md)
+- [private checks gate deploy only when the source root opts in](2026-10-09-private-checks-gate-deploy-only-when-the-source-root-opts-in.md)
+- [the active source root is resolved in one place](2026-10-09-the-active-source-root-is-resolved-in-one-place.md)
 
 Settings, registries and state:
 
 - [layer order and provenance](2026-10-09-layer-order-and-provenance.md)
 - [explicit list modes in layers](2026-10-09-explicit-list-modes-in-layers.md)
+- [list modes use a modes table](2026-10-09-list-modes-use-a-modes-table.md), settles the open syntax point above
 - [home layout and safe writes](2026-10-09-home-layout-and-safe-writes.md)
+- [the home is dot stratarc with an environment override](2026-10-09-the-home-is-dot-stratarc-with-an-environment-override.md), settles the open home point above
 - [adapter registry and support ranges](2026-10-09-adapter-registry-and-support-ranges.md)
+- [version detection runs in an isolated home](2026-10-09-version-detection-runs-in-an-isolated-home.md)
 - [providers hold secret references only](2026-10-09-providers-hold-secret-references-only.md)
 - [optional change log](2026-10-09-optional-change-log.md)
 
@@ -43,7 +48,9 @@ Command line and interfaces:
 - [message catalog with ids](2026-10-09-message-catalog-with-ids.md)
 - [read-only local API](2026-10-09-read-only-local-api.md)
 - [local API safeguards](2026-10-09-local-api-safeguards.md)
-- [terminal UI library is open](2026-10-09-terminal-ui-library-is-open.md)
+- [terminal UI library is open](2026-10-09-terminal-ui-library-is-open.md), superseded by the Textual record below
+- [Textual is an optional extra for the terminal interface](2026-10-09-textual-is-an-optional-extra-for-the-terminal-interface.md)
+- [starc is the short command alias](2026-10-09-starc-is-the-short-command-alias.md)
 - [CLI design is delivered in ordered slices](2026-10-09-cli-design-is-delivered-in-ordered-slices.md)
 - [first run is a choice, not a scan](2026-10-09-first-run-is-a-choice-not-a-scan.md)
 
