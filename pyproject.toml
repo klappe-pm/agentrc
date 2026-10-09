@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agentrc"
+name = "stratarc"
 dynamic = ["version"]
 description = "One agent configuration source, rendered into every agent runtime."
 readme = "README.md"
@@ -17,22 +17,22 @@ dependencies = []
 test = ["pytest", "jsonschema"]
 
 [project.scripts]
-agentrc = "agentrc.cli:main"
+stratarc = "stratarc.cli:main"
 
 [project.urls]
-Repository = "https://github.com/klappe-pm/agentrc"
+Repository = "https://github.com/klappe-pm/stratarc"
 
 [tool.hatch.version]
-path = "agentrc/__init__.py"
+path = "stratarc/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["agentrc"]
-# Ship every file under agentrc/, including non-Python data and dotfiles.
-artifacts = ["agentrc/data/**"]
+packages = ["stratarc"]
+# Ship every file under stratarc/, including non-Python data and dotfiles.
+artifacts = ["stratarc/data/**"]
 
 [tool.hatch.build.targets.sdist]
-include = ["agentrc", "tests", "examples", "README.md", "LICENSE", "pyproject.toml"]
-artifacts = ["agentrc/data/**"]
+include = ["stratarc", "tests", "examples", "README.md", "LICENSE", "pyproject.toml"]
+artifacts = ["stratarc/data/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

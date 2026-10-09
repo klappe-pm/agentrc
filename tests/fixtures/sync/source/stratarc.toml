@@ -1,0 +1,5 @@
+# stratarc configuration for the sync test fixture.
+
+[runtimes.claude]
+enabled = true
+target = "~/.claude"

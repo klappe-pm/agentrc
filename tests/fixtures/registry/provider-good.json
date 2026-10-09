@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "example-cloud",
+  "endpoint": "https://api.example.com/v1",
+  "models": [{ "id": "example-large", "display_name": "Example Large" }, { "id": "example-small" }],
+  "secret": "secret://example/api-key",
+  "description": "A synthetic provider."
+}

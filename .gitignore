@@ -17,6 +17,7 @@ env/
 # build outputs
 build/
 dist/
+site/
 *.whl
 
 # secrets

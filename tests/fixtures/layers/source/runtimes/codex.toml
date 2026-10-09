@@ -1,0 +1,4 @@
+# Values specific to the codex runtime.
+[permissions.network]
+_modes = { allow = "extend" }
+allow = ["registry.example.org"]

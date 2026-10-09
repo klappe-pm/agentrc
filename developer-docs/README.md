@@ -1,6 +1,6 @@
 # developer-docs
 
-Documentation for people who change agentrc: you clone the repository, run its tests, add an adapter or fix a bug, and open a pull request. It uses the same four [Diátaxis](https://diataxis.fr/) quadrants as the user documentation under [docs](../docs/README.md), so the folder a page sits in tells you what kind of page it is. Nothing here is needed to use agentrc; everything here assumes you have read the user documentation for the part you are changing.
+Documentation for people who change stratarc: you clone the repository, run its tests, add an adapter or fix a bug, and open a pull request. It uses the same four [Diátaxis](https://diataxis.fr/) quadrants as the user documentation under [docs](../docs/README.md), so the folder a page sits in tells you what kind of page it is. Nothing here is needed to use stratarc; everything here assumes you have read the user documentation for the part you are changing.
 
 ## tutorials
 
@@ -12,8 +12,8 @@ Recipes for a specific development goal. [add a runtime](how-to-guides/add-a-run
 
 ## reference
 
-Lookup pages that describe the codebase as it is. [source layout](reference/source-layout.md) describes the source root that `agentrc init` creates and which runtimes consume each part, and [package data](reference/package-data.md) describes how the assets under `agentrc/data/` are packaged and resolved through `importlib.resources`. Index: [reference](reference/README.md).
+Lookup pages that describe the codebase as it is. [source layout](reference/source-layout.md) describes the source root that `stratarc init` creates and which runtimes consume each part, and [package data](reference/package-data.md) describes how the assets under `stratarc/data/` are packaged and resolved through `importlib.resources`. Index: [reference](reference/README.md).
 
 ## explanation
 
-Discussion of why agentrc is built the way it is. [architecture](explanation/architecture.md) explains how one source root becomes several runtime configurations, and [decisions](explanation/decisions/README.md) holds agentrc's own decision records, one per choice that shaped the code. Index: [explanation](explanation/README.md).
+Discussion of why stratarc is built the way it is. [architecture](explanation/architecture.md) explains how one source root becomes several runtime configurations, and [decisions](explanation/decisions/README.md) holds stratarc's own decision records, one per choice that shaped the code. Index: [explanation](explanation/README.md).

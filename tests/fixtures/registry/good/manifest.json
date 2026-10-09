@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "acme",
+  "runtime": "acme",
+  "description": "A synthetic adapter used by the registry tests.",
+  "supports": ">=0.4,<0.9",
+  "tested": "0.8",
+  "schema": ">=1,<2",
+  "source_kinds": ["rules", "hooks"],
+  "files_written": ["settings.json", "rules/**"]
+}

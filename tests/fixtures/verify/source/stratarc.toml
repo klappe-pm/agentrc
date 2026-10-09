@@ -1,0 +1,5 @@
+# stratarc configuration for the verify test fixture.
+
+[runtimes.claude]
+enabled = true
+target = "~/.claude"

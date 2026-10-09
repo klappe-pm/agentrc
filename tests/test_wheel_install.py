@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
 import venv
@@ -9,7 +11,7 @@ import pytest
 
 from conftest import REPO_ROOT, tree_snapshot
 
-TEMPLATE = REPO_ROOT / "agentrc" / "data" / "templates" / "source-root"
+TEMPLATE = REPO_ROOT / "stratarc" / "data" / "templates" / "source-root"
 
 
 def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -24,7 +26,7 @@ def test_wheel_install_scaffolds_template(tmp_path: Path):
 
     wheel_dir = tmp_path / "wheels"
     _run([sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(wheel_dir), str(REPO_ROOT)])
-    wheels = list(wheel_dir.glob("agentrc-*.whl"))
+    wheels = list(wheel_dir.glob("stratarc-*.whl"))
     assert len(wheels) == 1, wheels
 
     env_dir = tmp_path / "venv"
@@ -34,7 +36,7 @@ def test_wheel_install_scaffolds_template(tmp_path: Path):
 
     target = tmp_path / "scaffold"
     # Run outside the checkout so the installed package, not the source tree, is imported.
-    _run([str(bin_dir / "agentrc"), "init", str(target)], cwd=tmp_path)
+    _run([str(bin_dir / "stratarc"), "init", str(target)], cwd=tmp_path)
 
     expected = tree_snapshot(TEMPLATE)
     assert expected, "template tree is empty"
@@ -42,3 +44,21 @@ def test_wheel_install_scaffolds_template(tmp_path: Path):
     assert sorted(actual) == sorted(expected)
     for rel, data in expected.items():
         assert actual[rel] == data, f"content differs: {rel}"
+
+    # The installed engine reads the scaffold: a dry-run sync under a temporary home succeeds
+    # and writes nothing, so the packaged adapters and data are all reachable from the wheel.
+    home = tmp_path / "home"
+    (home / ".claude").mkdir(parents=True)
+    env = {name: value for name, value in os.environ.items() if not name.startswith("STRATARC_")}
+    env.update(HOME=str(home), STRATARC_HOME=str(home), PYTHONPATH="")
+    before = tree_snapshot(tmp_path)
+    stratarc = str(bin_dir / "stratarc")
+
+    synced = _run([stratarc, "--root", str(target), "sync", "--dry-run"], cwd=tmp_path, env=env)
+    assert "sync: claude" in synced.stdout
+    assert tree_snapshot(tmp_path) == before
+
+    doctor = json.loads(_run([stratarc, "--root", str(target), "--json", "doctor"], cwd=tmp_path, env=env).stdout)
+    assert doctor["ok"] is True
+    assert doctor["data"]["adapters"] == 5
+    assert doctor["data"]["source_root"]["path"] == str(target.resolve())

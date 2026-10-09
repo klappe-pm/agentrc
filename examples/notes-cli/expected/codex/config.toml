@@ -1,11 +1,28 @@
-approval_policy = "on-request"
-default_permissions = "agentrc"
 
-# BEGIN agentrc permissions, generated from permissions.json
-[permissions.agentrc]
+approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+web_search = "live"
+default_permissions = "stratarc"
+[projects."<home>/projects/active/notes-cli"]
+trust_level = "trusted"
+
+[features]
+memories = false
+
+[memories]
+use_memories = false
+generate_memories = false
+
+[desktop]
+external-agent-import-sync-enabled = false
+
+[history]
+persistence = "save-all"
+# BEGIN stratarc permissions, generated from permissions.json
+[permissions.stratarc]
 extends = ":workspace"
 
-[permissions.agentrc.workspace_roots]
+[permissions.stratarc.workspace_roots]
 "~/projects" = true
 "~/.claude" = true
 "~/.codex" = true
@@ -13,10 +30,10 @@ extends = ":workspace"
 "~/.cursor" = true
 "~/.config/opencode" = true
 
-[permissions.agentrc.filesystem.":workspace_roots"]
+[permissions.stratarc.filesystem.":workspace_roots"]
 "**/.env" = "deny"
 
-[permissions.agentrc.network]
+[permissions.stratarc.network]
 enabled = false
 
-# END agentrc permissions
+# END stratarc permissions

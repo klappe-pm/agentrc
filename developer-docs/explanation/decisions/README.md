@@ -1,6 +1,6 @@
 # decisions
 
-This folder holds agentrc's decision records: one page per choice that shaped the code, written when the choice was made, so a later contributor can see what was decided, what was considered instead and why. A record is never rewritten once accepted; a reversal is a new record that names the one it supersedes. Read the records that touch a part of the code before proposing to change it.
+This folder holds stratarc's decision records: one page per choice that shaped the code, written when the choice was made, so a later contributor can see what was decided, what was considered instead and why. A record is never rewritten once accepted; a reversal is a new record that names the one it supersedes. Read the records that touch a part of the code before proposing to change it.
 
 ## format
 
@@ -8,4 +8,47 @@ Each record is a file named `YYYY-MM-DD-<short-kebab-title>.md` with these secti
 
 ## records
 
-None yet. The first records will cover the choices already visible in the code: keeping runtime assets under `agentrc/data/` and reading them through `importlib.resources`, shipping the attribution and token-shaped value detectors with the package, and placing the user and developer documentation in two trees with the same quadrant shape.
+Every record below is dated 2026-10-09 and was backfilled in one pass after the choices were made, so each carries the alternatives that were weighed then. The alternatives written from the code and the brief rather than from the maintainer's own words are marked for review in their pages. One record, the terminal interface library, is proposed and still open. Two accepted records carry an open point: the `_modes` syntax in explicit list modes, and whether the XDG path should be the primary home in the home layout.
+
+Naming and scope:
+
+- [rename to stratarc](2026-10-09-rename-to-stratarc.md)
+- [public package ships code only and no private integrations](2026-10-09-public-package-ships-code-only-and-no-private-integrations.md)
+- [one engine name](2026-10-09-one-engine-name.md)
+
+Source root and deployment:
+
+- [guards overlay package data](2026-10-09-guards-overlay-package-data.md)
+- [private extensions live in the source root](2026-10-09-private-extensions-live-in-the-source-root.md)
+- [no deploy branch guard unless environments declared](2026-10-09-no-deploy-branch-guard-unless-environments-declared.md)
+- [projects root from config](2026-10-09-projects-root-from-config.md)
+- [diff is a read-only full render](2026-10-09-diff-is-a-read-only-full-render.md)
+- [verify defines drift as a dry run](2026-10-09-verify-defines-drift-as-a-dry-run.md)
+- [sync verifies and rolls back on drift](2026-10-09-sync-verifies-and-rolls-back-on-drift.md)
+- [sync records changes at its write points](2026-10-09-sync-records-changes-at-its-write-points.md)
+
+Settings, registries and state:
+
+- [layer order and provenance](2026-10-09-layer-order-and-provenance.md)
+- [explicit list modes in layers](2026-10-09-explicit-list-modes-in-layers.md)
+- [home layout and safe writes](2026-10-09-home-layout-and-safe-writes.md)
+- [adapter registry and support ranges](2026-10-09-adapter-registry-and-support-ranges.md)
+- [providers hold secret references only](2026-10-09-providers-hold-secret-references-only.md)
+- [optional change log](2026-10-09-optional-change-log.md)
+
+Command line and interfaces:
+
+- [resource verb command grammar](2026-10-09-resource-verb-command-grammar.md)
+- [exit code map](2026-10-09-exit-code-map.md)
+- [message catalog with ids](2026-10-09-message-catalog-with-ids.md)
+- [read-only local API](2026-10-09-read-only-local-api.md)
+- [local API safeguards](2026-10-09-local-api-safeguards.md)
+- [terminal UI library is open](2026-10-09-terminal-ui-library-is-open.md)
+- [CLI design is delivered in ordered slices](2026-10-09-cli-design-is-delivered-in-ordered-slices.md)
+- [first run is a choice, not a scan](2026-10-09-first-run-is-a-choice-not-a-scan.md)
+
+Docs and tests:
+
+- [static docs site built from the repo](2026-10-09-static-docs-site-built-from-the-repo.md)
+- [example output is captured, not written](2026-10-09-example-output-is-captured-not-written.md)
+- [pytest is the only test runner](2026-10-09-pytest-is-the-only-test-runner.md)

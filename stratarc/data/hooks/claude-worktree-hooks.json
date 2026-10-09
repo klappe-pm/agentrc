@@ -1,0 +1,36 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/worktree-validate.sh",
+          "timeout": 3
+        }
+      ]
+    }
+  ],
+  "WorktreeCreate": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/worktree-create.sh",
+          "timeout": 30
+        }
+      ]
+    }
+  ],
+  "WorktreeRemove": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/.claude/hooks/worktree-remove.sh",
+          "timeout": 15
+        }
+      ]
+    }
+  ]
+}

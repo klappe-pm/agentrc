@@ -1,0 +1,7 @@
+{
+  "timeout": 60,
+  "network": {
+    "allow": ["api.example.com", "tools.example.net"],
+    "_modes": {"allow": "replace"}
+  }
+}

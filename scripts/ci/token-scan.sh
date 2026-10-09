@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Scan every tracked and untracked, non-ignored file for token-shaped values
-# with the shared detector in agentrc/data/hooks/lib/guard-utils.sh. Prints
+# with the shared detector in stratarc/data/hooks/lib/guard-utils.sh. Prints
 # the path and the kind of each match, never the value. Exit 0 clean, 1 on
 # any match, 2 when the detector is unavailable.
 
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
-UTILS="$ROOT/agentrc/data/hooks/lib/guard-utils.sh"
+UTILS="$ROOT/stratarc/data/hooks/lib/guard-utils.sh"
 if [ ! -f "$UTILS" ]; then
   printf 'token-scan: required detector is unavailable: %s\n' "$UTILS" >&2
   exit 2
 fi
-# shellcheck source=../../agentrc/data/hooks/lib/guard-utils.sh
+# shellcheck source=../../stratarc/data/hooks/lib/guard-utils.sh
 . "$UTILS"
 
 violations=0

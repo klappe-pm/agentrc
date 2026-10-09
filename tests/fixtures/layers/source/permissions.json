@@ -1,0 +1,8 @@
+{
+  "defaultMode": "default",
+  "network": {
+    "allow": ["api.example.com"],
+    "deny": []
+  },
+  "timeout": 30
+}

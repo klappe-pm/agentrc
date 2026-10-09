@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "reviewbot hook run --agent codex '--source=reviewbot-hook'",
+            "commandWindows": "reviewbot hook run --agent codex --source=reviewbot-hook",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "^Bash$"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "reviewbot hook run --agent codex '--source=reviewbot-hook'",
+            "commandWindows": "reviewbot hook run --agent codex --source=reviewbot-hook",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "^Bash$"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "reviewbot hook run --agent codex '--source=reviewbot-hook'",
+            "commandWindows": "reviewbot hook run --agent codex --source=reviewbot-hook",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

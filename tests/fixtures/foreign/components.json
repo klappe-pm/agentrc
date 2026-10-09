@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "foreign_hooks": [
+    {
+      "name": "reviewbot-hook",
+      "runtimes": ["claude", "codex", "cursor", "gemini"],
+      "owner": "reviewbot",
+      "wanted": true,
+      "match": "reviewbot hook run",
+      "registration": {
+        "claude": "captures/claude.json",
+        "codex": "captures/codex.json",
+        "cursor": "captures/cursor.json",
+        "gemini": "captures/gemini.json"
+      }
+    }
+  ],
+  "third_party_skills": [
+    {
+      "name": "reviewbot",
+      "runtimes": ["claude", "codex", "gemini"],
+      "owner": "reviewbot",
+      "wanted": true,
+      "installer": "reviewbot skills install",
+      "skills": ["reviewbot-review", "reviewbot-fix"]
+    },
+    {
+      "name": "leftover-canvas",
+      "runtimes": ["claude"],
+      "owner": "canvas-tool",
+      "wanted": false,
+      "installer": "canvas-tool install"
+    }
+  ]
+}

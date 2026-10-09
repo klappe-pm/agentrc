@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "adapter manifest",
+  "description": "What an adapter declares about itself: the runtime it translates to, the runtime versions and source schema versions it supports, the source kinds it renders and the files it writes.",
+  "$comment": "A range is one or more comma separated comparators (>=, >, <=, <, ==) over dotted numbers, or *. supports is a hard range: a runtime version outside it is unsupported. tested, when present, is the newest runtime version the adapter was verified against; a version above it but inside supports is outdated.",
+  "type": "object",
+  "required": ["schema_version", "name", "runtime", "supports", "schema", "source_kinds", "files_written"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "runtime": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "description": { "type": "string" },
+    "supports": { "$ref": "#/$defs/range" },
+    "tested": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)*$" },
+    "schema": { "$ref": "#/$defs/range" },
+    "source_kinds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+    },
+    "files_written": {
+      "description": "Paths the adapter writes, relative to the runtime's target directory. A trailing /** claims a whole directory.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "not": { "pattern": "^(/|~|.*\\.\\.)" } }
+    },
+    "module": { "type": "string", "description": "The Python module that renders the runtime, for a bundled adapter." },
+    "origin": { "enum": ["bundled", "registered"] },
+    "source": { "type": "string", "description": "Where a registered manifest was read from." }
+  },
+  "$defs": {
+    "range": {
+      "type": "string",
+      "pattern": "^(\\*|((>=|<=|==|>|<)[0-9]+(\\.[0-9]+)*)(,(>=|<=|==|>|<)[0-9]+(\\.[0-9]+)*)*)$"
+    }
+  }
+}

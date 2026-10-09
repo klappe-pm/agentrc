@@ -4,5 +4,5 @@ Reference pages describe the codebase as it is: the layout of a source root, how
 
 ## pages
 
-- [source layout](source-layout.md): the source root that `agentrc init` creates, what each file and directory holds and which runtimes consume it.
-- [package data](package-data.md): how the templates, schemas, hooks and git hooks under `agentrc/data/` are packaged and resolved through `importlib.resources`.
+- [source layout](source-layout.md): the source root that `stratarc init` creates, what each file and directory holds and which runtimes consume it.
+- [package data](package-data.md): how the templates, schemas, hooks and git hooks under `stratarc/data/` are packaged and resolved through `importlib.resources`.

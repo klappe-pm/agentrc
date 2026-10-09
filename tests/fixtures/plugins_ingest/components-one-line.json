@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "plugins": [
+    {"name": "old", "runtimes": ["claude"], "owner": "claude-code", "wanted": false, "marketplace": "m"}
+  ],
+  "services": []
+}

@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "stratarc local read API, version 1",
+  "description": "The response envelope of every route under /v1, and the shape of each route's data. Served by GET /v1/schema and printed by `stratarc api schema`.",
+  "$comment": "Every route answers with the envelope. A route's own shape is under $defs and listed in x-routes. An error answers with ok false, data null and an error object. List data carries total, shown, truncated, rows and next_offset; output_truncated is true when the 200000 byte response cap removed rows.",
+  "type": "object",
+  "required": ["ok", "data", "error"],
+  "additionalProperties": false,
+  "properties": {
+    "ok": { "type": "boolean" },
+    "data": {},
+    "error": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/error" }] }
+  },
+  "if": { "properties": { "ok": { "const": true } } },
+  "then": { "properties": { "error": { "type": "null" } } },
+  "else": { "properties": { "data": { "type": "null" }, "error": { "$ref": "#/$defs/error" } } },
+  "x-routes": {
+    "/v1/health": "#/$defs/health",
+    "/v1/config/keys": "#/$defs/config-keys",
+    "/v1/config/explain": "#/$defs/config-explain",
+    "/v1/projects": "#/$defs/projects",
+    "/v1/runtimes": "#/$defs/runtimes",
+    "/v1/adapters": "#/$defs/adapters",
+    "/v1/providers": "#/$defs/providers",
+    "/v1/log": "#/$defs/log",
+    "/v1/log/{id}": "#/$defs/log-entry",
+    "/v1/verify/last": "#/$defs/verify-last",
+    "/v1/schema": "#/$defs/schema"
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message", "param", "hint"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string" },
+        "param": { "type": ["string", "null"] },
+        "hint": { "type": ["string", "null"] }
+      }
+    },
+    "list": {
+      "type": "object",
+      "required": ["total", "shown", "truncated", "rows", "next_offset", "output_truncated"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "shown": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" },
+        "rows": { "type": "array" },
+        "next_offset": { "type": ["integer", "null"], "minimum": 0 },
+        "output_truncated": { "type": "boolean" }
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["status", "api", "version", "read_only", "source_root"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "ok" },
+        "api": { "const": "v1" },
+        "version": { "type": "string" },
+        "read_only": { "const": true },
+        "source_root": { "type": "string" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "project": { "type": ["string", "null"] },
+        "agent": { "type": ["string", "null"] },
+        "account": { "type": ["string", "null"] },
+        "runtime": { "type": ["string", "null"] }
+      }
+    },
+    "config-keys": {
+      "allOf": [
+        { "$ref": "#/$defs/list" },
+        {
+          "required": ["scope", "errors"],
+          "properties": {
+            "scope": { "$ref": "#/$defs/scope" },
+            "errors": { "type": "array", "items": { "$ref": "#/$defs/error" } },
+            "rows": {
+              "items": {
+                "type": "object",
+                "required": ["key", "value", "decided_by"],
+                "additionalProperties": false,
+                "properties": {
+                  "key": { "type": "string" },
+                  "value": {},
+                  "decided_by": { "$ref": "#/$defs/decided-by" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "decided-by": {
+      "type": "object",
+      "required": ["layer", "op"],
+      "additionalProperties": false,
+      "properties": { "layer": { "type": "string" }, "op": { "type": "string" } }
+    },
+    "config-explain": {
+      "allOf": [
+        { "$ref": "#/$defs/list" },
+        {
+          "required": ["scope"],
+          "properties": {
+            "scope": { "$ref": "#/$defs/scope" },
+            "rows": {
+              "items": {
+                "type": "object",
+                "required": ["key", "value", "decided_by", "steps"],
+                "additionalProperties": false,
+                "properties": {
+                  "key": { "type": "string" },
+                  "value": {},
+                  "decided_by": { "$ref": "#/$defs/decided-by" },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["layer", "file", "line", "op", "mode", "value", "overrode"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "layer": { "type": "string" },
+                        "file": { "type": "string" },
+                        "line": { "type": ["integer", "null"] },
+                        "op": { "type": "string" },
+                        "mode": { "type": ["string", "null"] },
+                        "value": {},
+                        "overrode": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": ["layer", "value"],
+                            "additionalProperties": false,
+                            "properties": { "layer": { "type": "string" }, "value": {} }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "projects": {
+      "allOf": [
+        { "$ref": "#/$defs/list" },
+        {
+          "properties": {
+            "rows": {
+              "items": {
+                "type": "object",
+                "required": ["name", "has_permissions", "has_settings", "agents"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "has_permissions": { "type": "boolean" },
+                  "has_settings": { "type": "boolean" },
+                  "agents": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "runtimes": {
+      "allOf": [
+        { "$ref": "#/$defs/list" },
+        {
+          "properties": {
+            "rows": {
+              "items": {
+                "type": "object",
+                "required": ["name", "adapter_module", "default_target", "hook_registry", "enabled", "target", "target_exists"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "adapter_module": { "type": "string" },
+                  "default_target": { "type": "string" },
+                  "hook_registry": { "type": ["string", "null"] },
+                  "enabled": { "type": "boolean" },
+                  "target": { "type": "string" },
+                  "target_exists": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "adapters": {
+      "allOf": [
+        { "$ref": "#/$defs/list" },
+        {
+          "properties": {
+            "rows": {
+              "items": {
+                "type": "object",
+                "required": ["name", "runtime", "supports", "schema", "source_kinds", "files_written", "origin", "deprecation"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "runtime": { "type": "string" },
+                  "description": { "type": "string" },
+                  "supports": { "type": "string" },
+                  "tested": { "type": ["string", "null"] },
+                  "schema": { "type": "string" },
+                  "source_kinds": { "type": "array", "items": { "type": "string" } },
+                  "files_written": { "type": "array", "items": { "type": "string" } },
+                  "origin": { "type": "string" },
+                  "deprecation": { "type": ["object", "null"] }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "providers": {
+      "allOf": [
+        { "$ref": "#/$defs/list" },
+        {
+          "properties": {
+            "rows": {
+              "items": {
+                "type": "object",
+                "required": ["name", "endpoint", "models", "has_secret"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "endpoint": { "type": "string" },
+                  "models": { "type": "array", "items": { "type": "string" } },
+                  "has_secret": { "type": "boolean" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "change": {
+      "type": "object",
+      "required": ["id", "ts", "actor_kind", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "ts": { "type": "string" },
+        "actor_kind": { "type": "string" },
+        "actor": { "type": "string" },
+        "command": { "type": "string" },
+        "file": { "type": "string" },
+        "layer": { "type": "string" },
+        "key": { "type": "string" },
+        "status": { "type": "string" },
+        "cause_id": { "type": "string" },
+        "projects": { "type": "array", "items": { "type": "string" } },
+        "targets": { "type": "array" }
+      }
+    },
+    "log": {
+      "allOf": [
+        { "$ref": "#/$defs/list" },
+        { "properties": { "rows": { "items": { "$ref": "#/$defs/change" } } } }
+      ]
+    },
+    "log-entry": {
+      "type": "object",
+      "required": ["change", "caused", "story"],
+      "additionalProperties": false,
+      "properties": {
+        "change": { "$ref": "#/$defs/change" },
+        "caused": { "type": "array", "items": { "type": "string" } },
+        "story": { "type": "string" }
+      }
+    },
+    "verify-last": {
+      "type": "object",
+      "required": ["id", "ts", "scope", "result", "counts", "files", "notes", "output_truncated", "files_total"],
+      "properties": {
+        "id": { "type": "string" },
+        "ts": { "type": "string" },
+        "scope": { "type": "string" },
+        "result": { "type": "string" },
+        "counts": { "type": "object" },
+        "files": { "type": "array" },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "output_truncated": { "type": "boolean" },
+        "files_total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "schema": {
+      "type": "object",
+      "required": ["$schema", "title"],
+      "properties": { "$schema": { "type": "string" }, "title": { "type": "string" } }
+    }
+  }
+}

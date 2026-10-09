@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "defaultMode": "bypassPermissions",
+  "blockReadsOutsideWorkingDirectories": true,
+  "additionalDirectories": ["~/projects"],
+  "allow": ["Bash(git *)", "Read(~/projects/**)"],
+  "deny": ["Bash(sudo *)", "Read(**/.env)"],
+  "ask": ["Bash(gh release *)"],
+  "autoMode": {
+    "allow": ["$defaults"],
+    "soft_deny": ["$defaults"],
+    "environment": ["$defaults"]
+  }
+}

@@ -4,6 +4,7 @@ Reference pages describe the machinery: the commands, the keys, the files each r
 
 ## pages
 
-- [cli](cli.md): every subcommand of the `agentrc` command with its arguments and exit statuses.
-- [configuration](configuration.md): every key in `agentrc.toml`, the JSON Schemas that validate the source root, and the environment variables that override them.
+- [cli](cli.md): every subcommand of the `stratarc` command with its arguments and exit statuses.
+- [api](api.md): the read-only local API, its transport, routes, response envelope and limits.
+- [configuration](configuration.md): every key in `stratarc.toml`, the JSON Schemas that validate the source root, and the environment variables that override them.
 - [runtimes](runtimes/README.md): the supported runtimes, their default targets and one page per runtime: [claude](runtimes/claude.md), [codex](runtimes/codex.md), [cursor](runtimes/cursor.md), [gemini](runtimes/gemini.md) and [opencode](runtimes/opencode.md).

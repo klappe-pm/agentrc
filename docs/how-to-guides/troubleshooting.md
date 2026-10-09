@@ -4,7 +4,7 @@ This guide collects known failure modes and their fixes, one problem per heading
 
 ## init-refuses-a-target-that-is-not-empty
 
-`agentrc init` writes only into a directory that does not exist or holds no files, and says `is not empty; refusing to scaffold into it` otherwise. Pick a new directory, or empty the one you named. It never merges a template into existing files.
+`stratarc init` writes only into a directory that does not exist or holds no files, and says `is not empty; refusing to scaffold into it` otherwise. Pick a new directory, or empty the one you named. It never merges a template into existing files.
 
 ## a-command-exits-with-status-2
 
@@ -12,4 +12,4 @@ This guide collects known failure modes and their fixes, one problem per heading
 
 ## planned-sections
 
-Once the engine is extracted this page will also cover a runtime directory agentrc cannot write, drift reported by `agentrc check`, a guard hook that blocks an action, and files left behind that `agentrc prune` removes.
+Once the engine is extracted this page will also cover a runtime directory stratarc cannot write, drift reported by `stratarc check`, a guard hook that blocks an action, and files left behind that `stratarc prune` removes.

@@ -24,9 +24,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: install test dependencies
-        run: python -m pip install pytest jsonschema
+        run: python -m pip install -e '.[test]'
+      - name: no machine paths in tests
+        run: "! grep -rIn '/Users/' tests"
       - name: pytest
         run: python -m pytest -q
+      - name: validate the example and the template
+        run: |
+          python -m stratarc validate --root examples/notes-cli/source --strict --checks generic
+          python -m stratarc validate --root stratarc/data/templates/source-root --strict --checks generic
 
   lint-and-scan:
     name: lint-and-scan
@@ -37,7 +43,7 @@ jobs:
           persist-credentials: false
       - name: shellcheck
         run: |
-          git ls-files -z '*.sh' 'agentrc/data/git-hooks/*' | xargs -0 shellcheck -x -P SCRIPTDIR
+          git ls-files -z '*.sh' 'stratarc/data/git-hooks/*' | xargs -0 shellcheck -x -P SCRIPTDIR
       - name: token-shaped value scan
         run: bash scripts/ci/token-scan.sh
       - name: frontmatter key check

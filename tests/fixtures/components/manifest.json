@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "budgets": {
+    "tool_calls": {
+      "total": 400,
+      "per_tool": {}
+    },
+    "tokens": {
+      "input": null,
+      "output": null,
+      "cache_read": null,
+      "cache_write": null,
+      "total": null
+    },
+    "turns": 100,
+    "wall_minutes": null,
+    "skills": {
+      "count": null,
+      "tokens": null
+    },
+    "mcp_servers": {
+      "count": null,
+      "tools": null
+    },
+    "rules": {
+      "words": null
+    },
+    "hooks": {
+      "count": null
+    },
+    "warn_at": 0.8
+  },
+  "runtime_settings": {
+    "claude": {
+      "model": "example-model",
+      "settings": {
+        "statusLine": {
+          "type": "command",
+          "command": "statusline"
+        }
+      }
+    },
+    "opencode": {
+      "provider": {
+        "local-gateway": {
+          "npm": "@ai-sdk/openai-compatible",
+          "options": {
+            "baseURL": "http://127.0.0.1:3001/v1"
+          }
+        }
+      }
+    }
+  },
+  "mcp_servers": [
+    {
+      "name": "search",
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "owner": "example",
+      "wanted": true,
+      "command": "npx",
+      "args": [
+        "-y",
+        "example-search"
+      ],
+      "env": {
+        "SEARCH_TOKEN": "secret://example/search-token"
+      }
+    }
+  ],
+  "plugins": [
+    {
+      "name": "workflow-helpers",
+      "runtimes": [
+        "claude"
+      ],
+      "owner": "example",
+      "wanted": true,
+      "marketplace": "example-marketplace"
+    }
+  ],
+  "foreign_hooks": [
+    {
+      "name": "vendor-hook",
+      "runtimes": [
+        "claude"
+      ],
+      "owner": "example",
+      "wanted": false,
+      "match": "vendor-hook run"
+    }
+  ],
+  "third_party_skills": [
+    {
+      "name": "style-skills",
+      "runtimes": [
+        "claude"
+      ],
+      "owner": "example",
+      "wanted": true,
+      "installer": "npx style-skills install",
+      "skills": [
+        "style-review",
+        "style-fix"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "ripgrep",
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "owner": "example",
+      "wanted": true,
+      "command": "rg",
+      "install": "brew install ripgrep",
+      "version": "14.1.1",
+      "image": {
+        "method": "apt",
+        "package": "ripgrep"
+      }
+    }
+  ],
+  "platform_differences": [
+    {
+      "name": "launchd",
+      "description": "The Mac schedules jobs with launchd; Linux has none.",
+      "platform": "darwin",
+      "paths": [
+        "home:Library/LaunchAgents/*"
+      ]
+    }
+  ],
+  "environments": {
+    "container": {
+      "ref": "main",
+      "description": "Deployed from the main branch."
+    },
+    "mac": {
+      "ref": "stable",
+      "description": "Deployed from the stable branch."
+    }
+  },
+  "promotion": {
+    "soak_days": 3,
+    "risk_tiers": {
+      "high": {
+        "soak_days": 5,
+        "paths": [
+          "hooks/"
+        ]
+      },
+      "low": {
+        "soak_days": 0,
+        "paths": [
+          "docs/"
+        ],
+        "documentation": true
+      }
+    }
+  },
+  "autonomy": {
+    "concurrency": 2,
+    "per_project": 1,
+    "interval_minutes": 10,
+    "daily_tokens": null
+  },
+  "services": [
+    {
+      "name": "embeddings",
+      "runtimes": [
+        "claude"
+      ],
+      "owner": "example",
+      "wanted": true,
+      "kind": "launchd",
+      "label": "com.example.embeddings",
+      "port": 11434,
+      "plist": "scripts/launchd/com.example.embeddings.plist",
+      "installed": false
+    },
+    {
+      "name": "vendor-app",
+      "runtimes": [
+        "claude"
+      ],
+      "owner": "Vendor.app",
+      "wanted": false,
+      "kind": "app",
+      "label": "Vendor",
+      "port": 11434,
+      "match": "/Applications/Vendor.app/",
+      "remove": "killall Vendor"
+    }
+  ]
+}

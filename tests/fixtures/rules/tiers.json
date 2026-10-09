@@ -1,0 +1,11 @@
+{
+  "global": [
+    "never-commit-local-databases.md"
+  ],
+  "common": [
+    "conventional-commit-messages.md"
+  ],
+  "project": [
+    "tests-use-a-temporary-directory.md"
+  ]
+}

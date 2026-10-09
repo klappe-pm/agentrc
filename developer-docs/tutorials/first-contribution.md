@@ -11,10 +11,10 @@ This tutorial takes you from a fresh clone to a merged-ready pull request. You s
 ## clone-and-install
 
 ```bash
-git clone https://github.com/klappe-pm/agentrc && cd agentrc && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[test]'
+git clone https://github.com/klappe-pm/stratarc && cd stratarc && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[test]'
 ```
 
-This installs agentrc as an editable package with `pytest` and `jsonschema`, the only test dependencies. The command itself has no runtime dependencies.
+This installs stratarc as an editable package with `pytest` and `jsonschema`, the only test dependencies. The command itself has no runtime dependencies.
 
 ## run-the-tests
 
@@ -22,7 +22,7 @@ This installs agentrc as an editable package with `pytest` and `jsonschema`, the
 python3 -m pytest
 ```
 
-The full suite includes one slow test that builds a wheel, installs it into a fresh virtual environment and checks that `agentrc init` from the installed package reproduces the bundled template. While iterating, skip it:
+The full suite includes one slow test that builds a wheel, installs it into a fresh virtual environment and checks that `stratarc init` from the installed package reproduces the bundled template. While iterating, skip it:
 
 ```bash
 python3 -m pytest -m 'not slow'
@@ -32,9 +32,9 @@ Run the full suite before you commit. See [run the tests](../how-to-guides/run-t
 
 ## make-a-change
 
-Pick something small for a first change: a wording fix in a page under `docs/`, a missing edge case in `tests/`, a clearer error message in `agentrc/cli.py`. Before you edit, read the part of the user documentation that covers what you are changing, and the [source layout](../reference/source-layout.md) if the change touches the template.
+Pick something small for a first change: a wording fix in a page under `docs/`, a missing edge case in `tests/`, a clearer error message in `stratarc/cli.py`. Before you edit, read the part of the user documentation that covers what you are changing, and the [source layout](../reference/source-layout.md) if the change touches the template.
 
-Two conventions catch newcomers. Runtime assets under `agentrc/data/` are reached only through `importlib.resources`, never through a path built from `__file__`; see [package data](../reference/package-data.md) for why. And filenames and Markdown headings are lowercase kebab-case, with one line per paragraph and no hard-wrapped prose.
+Two conventions catch newcomers. Runtime assets under `stratarc/data/` are reached only through `importlib.resources`, never through a path built from `__file__`; see [package data](../reference/package-data.md) for why. And filenames and Markdown headings are lowercase kebab-case, with one line per paragraph and no hard-wrapped prose.
 
 ## check-it-the-way-ci-will
 

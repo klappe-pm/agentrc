@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "budgets": {
+    "turns": 50,
+    "fleet": {
+      "model": "example-model",
+      "concurrent": 20
+    }
+  }
+}

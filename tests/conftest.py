@@ -23,9 +23,34 @@ def tree_snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
+@pytest.fixture(autouse=True)
+def no_engine_name_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep an ambient STRATARC_NAME from changing the default name a test expects."""
+    monkeypatch.delenv("STRATARC_NAME", raising=False)
+
+
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT
+
+
+@pytest.fixture
+def stratarc_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A temporary home that the engine reads through ``STRATARC_HOME``."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("STRATARC_HOME", str(home))
+    monkeypatch.setenv("HOME", str(home))
+    return home
+
+
+@pytest.fixture
+def source_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A temporary source root that the engine reads through ``STRATARC_SOURCE``."""
+    root = tmp_path / "source"
+    root.mkdir()
+    monkeypatch.setenv("STRATARC_SOURCE", str(root))
+    return root
 
 
 class ExternalTestFailure(Exception):
