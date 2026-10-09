@@ -967,10 +967,23 @@ def refuse_on_invalid_source(root: pathlib.Path) -> int | None:
     proceed. A deliberately invalid tree refuses before any target write; a
     valid tree returns None and sync continues.
     """
-    code = validate.main(["--root", str(root), "--strict", "--checks", "generic"])
+    from stratarc.config import ConfigError, load_config
+
+    try:
+        gate_private = load_config(root).gate_private
+    except ConfigError as error:
+        print(f"sync: refusing to deploy; {error}", file=sys.stderr)
+        return 2
+    checks = "all" if gate_private else "generic"
+    code = validate.main(["--root", str(root), "--strict", "--checks", checks])
     if code:
+        detail = (
+            " (private checks in scripts/private/validate_checks.py are gated by [validate] gate_private in stratarc.toml)"
+            if gate_private
+            else ""
+        )
         print(
-            "sync: refusing to deploy; stratarc.validate --strict --checks generic found an error",
+            f"sync: refusing to deploy; stratarc.validate --strict --checks {checks} found an error{detail}",
             file=sys.stderr,
         )
         return code

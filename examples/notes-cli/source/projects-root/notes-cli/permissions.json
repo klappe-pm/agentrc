@@ -22,5 +22,12 @@
   "ask": [
     "Bash(git push *)",
     "Bash(pip install *)"
-  ]
+  ],
+  "_modes": {
+    "additionalDirectories": "replace",
+    "runtimeDirectories": "replace",
+    "allow": "extend",
+    "deny": "extend",
+    "ask": "extend"
+  }
 }
