@@ -19,6 +19,10 @@ The engine commands (`sync`, `check`, `diff`, `prune`, `reconcile`, `validate`, 
 9. The terminal interface. It needs items 1, 2 and 6, and a decision on the drawing library.
 10. The documentation site, with the command reference and the error catalog generated from the code, and the first-run welcome screen.
 
+## known-defects
+
+- A project's malformed `.claude/settings.json` makes `stratarc projects` stop with a raw `JSONDecodeError` traceback (`stratarc/projects.py`, where the file is read in `sync_project`). It should refuse that one project with the file path and the parse error, using the error-message catalog, and continue with the others. The plugin ingest already withholds in that case, so the failure is in the project render only.
+
 ## open-questions
 
 - Whether list-valued settings default to replace or extend when a file omits `mode`.
