@@ -168,6 +168,28 @@ def test_a_project_scope_walks_into_the_project_and_restores_the_module(deployed
         verify.run("project:nope", root=root)
 
 
+def test_scope_all_walks_into_every_managed_project(deployed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root, _ = deployed
+    projects_dir = tmp_path / "projects"
+    checkout = projects_dir / "active" / "notes-cli"
+    (checkout / ".git").mkdir(parents=True)
+    monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(projects_dir))
+    source = root / "projects-root" / "notes-cli"
+    source.mkdir(parents=True)
+    (source / "AGENTS.md").write_text("# notes-cli\n", encoding="utf-8")
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = sync.main(["--root", str(root)])
+    assert code == 0, err.getvalue()
+    assert (checkout / "AGENTS.md").is_file(), out.getvalue()
+    clean = verify.run("all", root=root)
+    assert {(e["area"], e["name"], e["status"]) for e in clean.files if e["area"] == "project"} == {("project", "notes-cli", "verified")}
+    (checkout / "AGENTS.md").write_text("# edited by hand\n", encoding="utf-8")
+    drifted = verify.run("all", root=root)
+    assert drifted.exit_code == 6
+    assert any(e["area"] == "project" and e["name"] == "notes-cli" and e["status"] == "drift" for e in drifted.files)
+
+
 def test_a_skipped_project_is_not_drift(deployed, monkeypatch: pytest.MonkeyPatch) -> None:
     root, _ = deployed
     monkeypatch.setattr(projects, "sync_project", lambda name, dry, cp=None: ["skip notes-cli: no checkout"])

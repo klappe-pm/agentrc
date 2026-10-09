@@ -284,7 +284,7 @@ def run(scope: str = "all", *, root: Path | None = None, record: bool = True, ac
                     cleanup_all()
             else:
                 report.notes.append("no installed runtime is enabled; nothing to compare")
-        if kind == "project" or project_names:
+        if kind in ("all", "project") or project_names:
             report.files.extend(_compare_projects(root, project_names, report.notes))
 
     _write_report(report)
