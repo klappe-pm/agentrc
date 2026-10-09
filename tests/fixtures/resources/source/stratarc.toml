@@ -1,0 +1,12 @@
+# Source root settings. This comment must survive every edit.
+owner = "example-owner"
+
+# One table per runtime.
+[runtimes.claude]
+enabled = true   # on by default
+target = "~/.claude"
+
+[runtimes.codex]
+# codex stays off until it is needed
+enabled = false
+target = "~/.codex"
