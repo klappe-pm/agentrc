@@ -45,6 +45,7 @@ import sys
 import tempfile
 from importlib.resources import as_file
 
+from agentrc import paths
 from agentrc.control_plane import ControlPlane
 from agentrc.resources import data_dir
 from agentrc.rules_digest import SOURCE_TOKEN, _extract_binding_section, render_source, rules_prefix
@@ -393,6 +394,9 @@ def build_stage(
     """Return (stage_dir, notes). Caller may delete stage_dir; cleanup_all() also does."""
     stage = pathlib.Path(tempfile.mkdtemp(prefix=f"agentrc-stage-{col}-"))
     _STAGES.append(stage)
+    # A stage carries no agentrc.toml, so an adapter asking the stage for the
+    # engine name would get the default. Record the source root's name there.
+    (stage / paths.CONFIG_NAME).write_text(f'name = "{paths.engine_name(root)}"\n', encoding="utf-8")
     prefix = (
         "$HOME/.claude/hooks/"
         if col == "global"

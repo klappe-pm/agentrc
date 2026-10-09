@@ -429,3 +429,22 @@ class TestProjectDirectories:
         stage, _ = stage_of(plane, "demo")
         assert (stage / "skills" / "tidy" / "SKILL.md").read_text(encoding="utf-8") == "project\n"
         assert "replaces the shared skill:tidy" in capsys.readouterr().err
+
+
+class TestEngineNameInTheStage:
+    """A stage holds no agentrc.toml of its own, so it records the source root's engine name for the adapters that read it."""
+
+    def test_a_custom_named_source_root_renders_the_servers_it_owns(self, root, stage_of):
+        from agentrc.adapters import _components
+
+        write(root / "agentrc.toml", 'name = "custom"\n')
+        manifest = {
+            "version": 1,
+            "mcp_servers": [{"name": "mine", "runtimes": ["codex"], "owner": "custom", "wanted": True, "command": "npx"}],
+        }
+        write(root / "components.json", json.dumps(manifest))
+        stage, _ = stage_of(Plane(mcps={"mine"}))
+        rendered, notes = _components.selected_servers(stage, "codex")
+        assert list(rendered) == ["mine"]
+        assert notes == []
+        assert _components.ledger_name(stage) == "custom-mcp-servers.json"

@@ -68,6 +68,17 @@ def projects_root(explicit: Path | None = None, root: Path | None = None) -> Pat
     return home() / "projects" / "active"
 
 
+def projects_dir(root: Path | None = None, explicit: Path | None = None) -> Path:
+    """The directory whose children are the status directories (`active/`, `archived/`, and so on).
+
+    `projects_root` defaults to `<home>/projects/active`, the directory that holds the checkouts; the status directories are its siblings, so that default maps one level up to `<home>/projects`. A value from the explicit argument, `LLM_ROOT_PROJECTS_DIR` or `projects_root` in `agentrc.toml` names this directory itself and is used as given. Note the argument order differs from `projects_root`: the source root comes first.
+    """
+    resolved = projects_root(explicit, root)
+    if resolved == home() / "projects" / "active":
+        return home() / "projects"
+    return resolved
+
+
 def engine_name(root: Path | None = None) -> str:
     """The name the engine puts on everything it generates and records.
 

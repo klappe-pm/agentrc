@@ -116,6 +116,28 @@ def test_projects_root_reads_config_of_explicit_root(tmp_path):
     assert paths.projects_root(root=other) == Path("/elsewhere")
 
 
+def test_projects_dir_default_lifts_the_active_folder_to_its_parent(tmp_path):
+    assert paths.projects_dir() == tmp_path / "home" / "projects"
+
+
+def test_projects_dir_uses_the_environment_value_as_given(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(tmp_path / "work"))
+    assert paths.projects_dir() == tmp_path / "work"
+
+
+def test_projects_dir_reads_the_configuration_of_the_given_root(tmp_path):
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "agentrc.toml").write_text('projects_root = "/elsewhere"\n')
+    assert paths.projects_dir(other) == Path("/elsewhere")
+    assert paths.projects_dir() == tmp_path / "home" / "projects"
+
+
+def test_projects_dir_explicit_beats_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_ROOT_PROJECTS_DIR", str(tmp_path / "env"))
+    assert paths.projects_dir(explicit=tmp_path / "flag") == tmp_path / "flag"
+
+
 def test_github_owner_environment_beats_config(monkeypatch, tmp_path):
     (tmp_path / "agentrc.toml").write_text('owner = "from-config"\n')
     monkeypatch.setenv("AGENTRC_GITHUB_OWNER", "from-env")
