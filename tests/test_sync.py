@@ -214,6 +214,59 @@ class TestRefuseOnInvalidSource:
         assert sync.refuse_on_invalid_source(tmp_path) is None
         assert "always" not in capsys.readouterr().out
 
+    @staticmethod
+    def _private(root: Path, body: str) -> None:
+        (root / "scripts" / "private").mkdir(parents=True)
+        (root / "scripts" / "private" / "validate_checks.py").write_text(body)
+
+    _FAILING = "from stratarc.validate import finding\n\n\ndef check_always(root):\n    return [finding('error', 'always', 'x', 'fails every run')]\n\n\nVALIDATE_CHECKS = [check_always]\n"
+    _PASSING = "VALIDATE_CHECKS = [lambda root: []]\n"
+
+    def test_gate_private_defaults_to_the_generic_checks(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: list[list[str]] = []
+        monkeypatch.setattr(sync.validate, "main", lambda argv: seen.append(list(argv)) or 0)
+        (tmp_path / "stratarc.toml").write_text("[validate]\ngate_private = false\n")
+        assert sync.refuse_on_invalid_source(tmp_path) is None
+        assert seen[0][-1] == "generic"
+
+    def test_gate_private_true_asks_for_all_checks(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: list[list[str]] = []
+        monkeypatch.setattr(sync.validate, "main", lambda argv: seen.append(list(argv)) or 0)
+        (tmp_path / "stratarc.toml").write_text("[validate]\ngate_private = true\n")
+        assert sync.refuse_on_invalid_source(tmp_path) is None
+        assert seen == [["--root", str(tmp_path), "--strict", "--checks", "all"]]
+
+    def test_gate_private_blocks_on_a_failing_private_check(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        (tmp_path / "stratarc.toml").write_text("[validate]\ngate_private = true\n")
+        self._private(tmp_path, self._FAILING)
+        refusal = sync.refuse_on_invalid_source(tmp_path)
+        captured = capsys.readouterr()
+        assert refusal not in (None, 0)
+        assert "refusing to deploy" in captured.err
+        assert "always" in captured.out
+
+    def test_gate_private_passes_when_private_checks_pass(self, tmp_path: Path) -> None:
+        (tmp_path / "stratarc.toml").write_text("[validate]\ngate_private = true\n")
+        self._private(tmp_path, self._PASSING)
+        assert sync.refuse_on_invalid_source(tmp_path) is None
+
+    def test_gate_private_blocks_on_a_broken_extension_and_names_the_file(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        (tmp_path / "stratarc.toml").write_text("[validate]\ngate_private = true\n")
+        self._private(tmp_path, "raise RuntimeError('broken')\n")
+        refusal = sync.refuse_on_invalid_source(tmp_path)
+        captured = capsys.readouterr()
+        assert refusal not in (None, 0)
+        assert "scripts/private/validate_checks.py" in captured.out
+
+    def test_a_broken_extension_does_not_block_when_gate_private_is_off(self, tmp_path: Path) -> None:
+        self._private(tmp_path, "raise RuntimeError('broken')\n")
+        assert sync.refuse_on_invalid_source(tmp_path) is None
+
+    def test_a_malformed_gate_private_refuses_naming_the_file(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        (tmp_path / "stratarc.toml").write_text('[validate]\ngate_private = "yes"\n')
+        assert sync.refuse_on_invalid_source(tmp_path) == 2
+        assert "stratarc.toml" in capsys.readouterr().err
+
 
 # ---------------------------------------------------------------------------
 # a full run with the delegated steps replaced
@@ -2066,7 +2119,9 @@ class TestHomeLayout:
         root.mkdir()
         run_main("--root", str(root))
         manifest = stratarc_home / ".stratarc" / "adapters" / "codex" / "manifest.json"
-        manifest.write_text(manifest.read_text().replace('"supports": "*"', '"supports": ">=0"'))
+        from stratarc.adapters._supports import SUPPORTS
+
+        manifest.write_text(manifest.read_text().replace(f'"supports": "{SUPPORTS["codex"]["supports"]}"', '"supports": ">=0"'))
         run_main("--root", str(root))
         assert '"supports": ">=0"' in manifest.read_text()
 

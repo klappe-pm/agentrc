@@ -48,6 +48,26 @@ def test_source_root_origin_is_the_nearest_config_without_the_variable(
     assert data["source_root"]["resolved_from"] == "nearest stratarc.toml"
 
 
+def test_source_root_origin_is_the_active_source_when_nothing_nearer_names_one(
+    stratarc_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    registered = tmp_path / "registered"
+    registered.mkdir()
+    (registered / "stratarc.toml").write_text("", encoding="utf-8")
+    (stratarc_home / ".stratarc").mkdir()
+    (stratarc_home / ".stratarc" / "sources.toml").write_text(f'active = "main"\n[sources.main]\npath = "{registered}"\n', encoding="utf-8")
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    monkeypatch.delenv("STRATARC_SOURCE", raising=False)
+    monkeypatch.chdir(bare)
+
+    data, problems = doctor.collect(root_flag=False, started_ms=0)
+
+    assert problems == []
+    assert data["source_root"]["path"] == str(registered.resolve())
+    assert data["source_root"]["resolved_from"] == "active source (sources.toml)"
+
+
 def test_a_missing_source_root_is_reported_not_raised(stratarc_home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("STRATARC_SOURCE", str(tmp_path / "absent"))
 
@@ -92,6 +112,10 @@ def test_the_permissions_table_covers_every_command_and_only_provider_test_uses_
         assert command in named, command
     assert set(cli.PASSTHROUGH) | set(cli.RESOURCES) <= set(named.replace("|", " ").split())
     assert [row["command"] for row in rows if row["network"]] == ["provider test"]
+    for command in ("source init", "source use|move", "project add|edit|enable|disable", "project remove", "runtime enable|disable|target", "agent edit", "account add|edit|remove", "ui"):
+        assert command in [row["command"] for row in rows], command
+    ui_row = next(row for row in rows if row["command"] == "ui")
+    assert ui_row["network"] is False and any("only what the commands it starts write" in item for item in ui_row["writes"])
     assert all(set(row) == {"command", "reads", "writes", "network", "runs"} for row in rows)
     text = doctor.render_permissions(rows)
     assert text.splitlines()[0].startswith("permissions:")

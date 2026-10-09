@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 from importlib.resources import files
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import pytest
 
 from stratarc import home_layout as layout
 from stratarc import registry
+from stratarc.adapters._supports import SUPPORTS
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "registry"
 GOOD = FIXTURES / "good"
@@ -122,7 +124,7 @@ def test_registered_manifest_overrides_the_bundled_one(stratarc_home: Path, tmp_
     registry.register(str(directory))
     assert registry.list_adapters()["codex"]["supports"] == ">=0.4,<0.9"
     registry.remove("codex")
-    assert registry.list_adapters()["codex"]["supports"] == "*"
+    assert registry.list_adapters()["codex"]["supports"] == SUPPORTS["codex"]["supports"]
 
 
 def test_register_bundled_writes_missing_manifests_once(stratarc_home: Path) -> None:
@@ -301,3 +303,86 @@ def test_cli_deprecate_then_noninteractive_notice(stratarc_home: Path, capsys) -
     assert run(["deprecate", "acme", "--reason", "x", "--end-date", "soon"], capsys, interactive=False)[0] == 2
     code, out, _ = run(["status", "--json"], capsys, detect=dict, interactive=False)
     assert code == 0 and next(r for r in json.loads(out)["data"]["adapters"] if r["name"] == "acme")["deprecated"] is True
+
+
+# version detection runs in an isolated home
+
+
+def fake_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> tuple[Path, Path]:
+    """A `codex` command on a PATH of its own; returns the caller's redirected home and the file the command appends its observations to."""
+    real_home = tmp_path / "real-home"
+    real_home.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "record.txt"
+    script = bin_dir / "codex"
+    script.write_text(f"#!/bin/sh\nRECORD='{record}'\n{body}\n")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    monkeypatch.setenv("HOME", str(real_home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(real_home / ".config"))
+    monkeypatch.setenv("GH_TOKEN", "placeholder-not-a-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "placeholder-not-a-secret")
+    monkeypatch.setattr(registry, "_DETECTED", {})
+    return real_home, record
+
+
+WRITES_EVERYWHERE = """
+mkdir -p "$HOME/.codex/tmp" "$XDG_CONFIG_HOME/opencode"
+echo x > "$HOME/.codex/tmp/arg0"
+echo x > "$XDG_CONFIG_HOME/opencode/state"
+echo x > "./cwd-file"
+echo "cwd=$(pwd) home=$HOME" >> "$RECORD"
+env | cut -d= -f1 | sort >> "$RECORD"
+echo "codex-cli 0.9.1"
+"""
+
+
+def test_detection_leaves_the_callers_home_untouched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_home, record = fake_runtime(tmp_path, monkeypatch, WRITES_EVERYWHERE)
+    versions = registry.detect_versions()
+    assert versions["codex"] == "0.9.1"
+    assert list(real_home.iterdir()) == []
+    seen = record.read_text()
+    first = seen.splitlines()[0]
+    assert str(real_home) not in first
+    assert not Path(first.split("cwd=")[1].split(" ")[0]).exists()
+    assert str(Path.cwd()) not in first
+
+
+def test_detection_environment_is_an_allowlist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _, record = fake_runtime(tmp_path, monkeypatch, WRITES_EVERYWHERE)
+    registry.detect_versions()
+    names = set(record.read_text().splitlines()[1:])
+    assert "GH_TOKEN" not in names and "OPENAI_API_KEY" not in names
+    assert {"PATH", "HOME", "TERM", "NO_COLOR", "CI", "XDG_CONFIG_HOME", "CODEX_HOME"} <= names
+    allowed = {"PATH", "LANG", "TERM", "NO_COLOR", "CI", "PWD", "SHLVL", "_", "OLDPWD", *registry._DETECT_HOME_VARIABLES}
+    assert {n for n in names if not n.startswith("LC_")} <= allowed
+
+
+def test_a_hanging_runtime_times_out_to_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_runtime(tmp_path, monkeypatch, "exec sleep 30")
+    monkeypatch.setattr(registry, "DETECT_TIMEOUT_SECONDS", 0.5)
+    started = time.monotonic()
+    assert registry.detect_versions()["codex"] is None
+    assert time.monotonic() - started < 5, "the configured timeout must bound the wait, not the binary's own sleep"
+
+
+def test_an_unparsable_runtime_is_unknown_and_never_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_runtime(tmp_path, monkeypatch, "echo nothing useful")
+    versions = registry.detect_versions()
+    assert versions["claude"] is None
+    assert versions["codex"] is None
+
+
+def test_a_version_printed_before_a_nonzero_exit_is_still_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Some CLIs print the version and then exit nonzero from a wrapper; the output decides, not the status."""
+    fake_runtime(tmp_path, monkeypatch, "echo codex-cli 0.9.1; exit 3")
+    assert registry.detect_versions()["codex"] == "0.9.1"
+
+
+def test_detection_is_cached_for_the_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _, record = fake_runtime(tmp_path, monkeypatch, 'echo run >> "$RECORD"\necho "codex-cli 0.9.1"')
+    assert registry.detect_versions()["codex"] == "0.9.1"
+    assert registry.detect_versions()["codex"] == "0.9.1"
+    assert record.read_text().splitlines() == ["run"]

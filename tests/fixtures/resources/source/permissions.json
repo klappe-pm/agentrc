@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "allow": ["Read(*)"],
+  "deny": [],
+  "ask": []
+}

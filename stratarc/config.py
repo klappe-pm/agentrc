@@ -1,6 +1,6 @@
 """Reads `stratarc.toml` from a source root.
 
-The file holds four things: a `[runtimes.<name>]` table per runtime with `enabled` and `target`, a `projects_root` directory, a GitHub `owner` and the engine `name` (default `stratarc`). A missing file yields the defaults; a malformed one raises `ConfigError` naming the file.
+The file holds five things: a `[runtimes.<name>]` table per runtime with `enabled` and `target`, a `projects_root` directory, a GitHub `owner`, the engine `name` (default `stratarc`) and `[validate] gate_private` (default false). A missing file yields the defaults; a malformed one raises `ConfigError` naming the file.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ class Config:
     projects_root: Path | None = None
     owner: str = ""
     name: str = DEFAULT_NAME
+    gate_private: bool = False
 
 
 def validate_name(value: object) -> bool:
@@ -90,7 +91,15 @@ def load_config(root: Path) -> Config:
     if not validate_name(name):
         raise _fail(path, "name must be a non-empty string matching ^[a-z][a-z0-9-]*$")
 
+    validate_table = data.get("validate", {})
+    if not isinstance(validate_table, dict):
+        raise _fail(path, "[validate] must be a table")
+    gate_private = validate_table.get("gate_private", False)
+    if not isinstance(gate_private, bool):
+        raise _fail(path, "validate.gate_private must be true or false")
+
     return Config(
+        gate_private=gate_private,
         name=name,
         runtimes=runtimes,
         projects_root=_expand(projects) if projects else None,

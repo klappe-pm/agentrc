@@ -1,0 +1,5 @@
+owner = "example-owner"
+
+[runtimes.codex]
+enabled = true
+target = "~/.codex"

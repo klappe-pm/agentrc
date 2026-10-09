@@ -63,6 +63,26 @@ def test_runtime_defaults(tmp_path):
     assert runtime.target is None
 
 
+def test_gate_private_defaults_to_false(tmp_path):
+    assert load_config(tmp_path).gate_private is False
+    write(tmp_path, "owner = 'x'\n")
+    assert load_config(tmp_path).gate_private is False
+
+
+def test_gate_private_true(tmp_path):
+    write(tmp_path, "[validate]\ngate_private = true\n")
+    assert load_config(tmp_path).gate_private is True
+
+
+@pytest.mark.parametrize("text", ['[validate]\ngate_private = "yes"\n', "validate = 1\n"])
+def test_gate_private_must_be_a_boolean_table(tmp_path, text):
+    write(tmp_path, text)
+    with pytest.raises(ConfigError) as caught:
+        load_config(tmp_path)
+    assert str(tmp_path / "stratarc.toml") in str(caught.value)
+    assert "validate" in str(caught.value)
+
+
 @pytest.mark.parametrize(
     "text",
     [

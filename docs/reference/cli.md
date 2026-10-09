@@ -17,7 +17,7 @@ Global options are accepted before or after the command. Each one lasts for the 
 | `--version` | print `stratarc <version>` and exit 0 |
 | `--help` | print the usage summary and exit 0 |
 
-Without a flag, each value comes from its variable, then from `stratarc.toml`, then from the default.
+Without a flag, each value comes from its variable, then from `stratarc.toml`, then from the default. The source root also falls back to the active entry of `.stratarc/sources.toml`, which `stratarc source use` writes, before the current directory.
 
 ## exit-statuses
 
@@ -42,7 +42,7 @@ With `--json` a command prints exactly one object on standard output and exits w
 {"ok": false, "data": null, "error": {"code": "msg-1001", "message": "...", "param": "root", "hint": "..."}}
 ```
 
-`ok` is true only for status 0. `data` is the command's result, or null when there is none. For an engine command it holds `command`, `exit`, and the `stdout` and `stderr` the module wrote. For `config`, `log`, `verify`, `provider` and `adapter` it is the resource's own result (the module prints the envelope and the command line only resolves the error). `error.code` is a message id from the catalog below, or one of `failure`, `invalid-input`, `denied`, `conflict`, `unavailable`, `drift` and `interrupted` when a module failed without one. A resource error whose module code has a catalog entry (`unknown-key` is `msg-1105`, `provider-unreachable` is `msg-1113`, and so on) shows the catalog id, the catalog recovery, and the module's own sentence inside the problem. A usage error from one of these commands (a missing verb, an unknown option) prints an envelope with the code `invalid-input` and the usage message, so `--json` always prints exactly one object.
+`ok` is true only for status 0. `data` is the command's result, or null when there is none. For an engine command it holds `command`, `exit`, and the `stdout` and `stderr` the module wrote. For `config`, `log`, `verify`, `provider`, `adapter`, `source`, `project`, `runtime`, `agent` and `account` it is the resource's own result (the module prints the envelope and the command line only resolves the error). `error.code` is a message id from the catalog below, or one of `failure`, `invalid-input`, `denied`, `conflict`, `unavailable`, `drift` and `interrupted` when a module failed without one. A resource error whose module code has a catalog entry (`unknown-key` is `msg-1105`, `provider-unreachable` is `msg-1113`, and so on) shows the catalog id, the catalog recovery, and the module's own sentence inside the problem. A usage error from one of these commands (a missing verb, an unknown option) prints an envelope with the code `invalid-input` and the usage message, so `--json` always prints exactly one object.
 
 ## error-messages
 
@@ -96,6 +96,22 @@ Without `--json`, an error prints two lines to standard error: the id and the pr
 | `msg-1136` | 2 | The provider does not serve the model. | List the models it serves with `stratarc provider show`. |
 | `msg-1137` | 2 | The command was given input it cannot use. | Check the arguments against `stratarc COMMAND --help`, then run it again. |
 | `msg-1138` | 5 | The data the command needs is not available. | Run the command that produces it first, or check that the path exists and can be read. |
+| `msg-1139` | 2 | The edit would leave the file invalid. | Fix the listed problems and run the command again, the file was left unchanged. |
+| `msg-1140` | 2 | No editor is configured to edit the file. | Set `$EDITOR` or `$VISUAL`, then run the command again. |
+| `msg-1141` | 2 | The command deletes files and needs confirmation. | Pass `--yes` to confirm, or `--dry-run` to preview. |
+| `msg-1142` | 2 | The source root is not registered or no longer exists. | Run `stratarc source list` for the registered ones, or register one with `stratarc source init`. |
+| `msg-1143` | 2 | The name cannot be used. | Use lowercase letters, digits and hyphens, starting with a letter. |
+| `msg-1144` | 2 | The value cannot be used. | Check the value against `stratarc COMMAND --help`, then run the command again. |
+| `msg-1145` | 2 | The path cannot be used. | Choose a path the command allows, which `stratarc COMMAND --help` describes. |
+| `msg-1146` | 2 | The configuration cannot be used. | Fix `stratarc.toml` in the source root, then run the command again. |
+| `msg-1147` | 4 | The project already exists. | Change it with `stratarc project edit`, or pick another name. |
+| `msg-1148` | 4 | The account already exists. | Change it with `stratarc account edit`, or pick another name. |
+| `msg-1149` | 4 | The source name is already registered. | Choose another `--name`, or use `stratarc source use`. |
+| `msg-1150` | 4 | The path already exists and is not empty. | Choose a new or empty directory. |
+| `msg-1151` | 5 | The control plane has no entry for the project. | Run `stratarc reconcile` to add it, then run the command again. |
+| `msg-1152` | 1 | The editor did not finish. | Check `$EDITOR`, then run the command again, nothing was saved. |
+| `msg-1153` | 5 | The terminal interface needs Textual, which is not installed. | Install it with `pip install 'stratarc[ui]'`, then run `stratarc ui` again. |
+| `msg-1154` | 4 | The change conflicts with what already exists. | Resolve the conflict, or choose another name or path, then run the command again. |
 
 ## init
 
@@ -268,3 +284,74 @@ stratarc adapter deprecate NAME --reason TEXT --end-date YYYY-MM-DD [--replaceme
 ```
 
 The translators from the source to a runtime. Each adapter has a manifest naming its runtime, the runtime versions it supports, the source schema versions it reads, the source kinds it renders and the files it writes; the bundled adapters are registered by the first write run. `register` validates a manifest from a file, a directory or an installed package and stores it; a registered manifest overrides the bundled one of the same name. `status` compares each adapter with the installed runtime and prints `ok`, `outdated`, `unsupported` or `unknown`; `--runtime-version` overrides a detected version. `sync` refuses to deploy through an unsupported adapter (`msg-1114`) and warns once for an outdated one (`msg-1115`). `deprecate` marks an adapter as unsupported from a date; the next interactive command asks once, a noninteractive run prints the notice and continues.
+
+## source
+
+```bash
+stratarc source init PATH [--name N] [--use] [--dry-run]
+stratarc source show
+stratarc source list
+stratarc source use NAME-or-PATH [--dry-run]
+stratarc source move NEW_PATH [--name N] [--dry-run] --yes
+```
+
+Where the source root lives and which one is active. `init` scaffolds a source root from the bundled template into `PATH` (absent or empty) and registers it in `.stratarc/sources.toml` under `--name` (taken from the folder name when absent); `--use` makes it the active one. `show` prints the effective source root, its registered name, the active name, whether `stratarc.toml` is present and the number of projects. `list` prints the registered roots and marks the active one. `use` makes a registered name, or an existing directory (which it registers), the active source root. `move` moves a registered root to `NEW_PATH` and updates `sources.toml`; it needs `--yes`. The active source root is read by every command: the order is `--root`, `STRATARC_SOURCE`, the nearest `stratarc.toml` above the current directory, the active entry of `sources.toml`, then the current directory. A `sources.toml` that is unreadable or written by a newer stratarc is ignored when resolving the root, and `source use` and `source list` report it. `init`, `use` and `move` write to the home and exit 3 (`msg-1003`) when it cannot be written, except with `--dry-run`. A name already registered exits 4 (`msg-1149`), a path that is not empty exits 4 (`msg-1150`), and an unknown source exits 2 (`msg-1142`).
+
+## project
+
+```bash
+stratarc project list
+stratarc project show NAME
+stratarc project add NAME [--dry-run]
+stratarc project edit NAME [--file REL] [--dry-run]
+stratarc project remove NAME [--dry-run] --yes
+stratarc project enable NAME [--dry-run]
+stratarc project disable NAME [--dry-run]
+```
+
+The projects under `projects-root/` and their overrides. `add` creates the project folder. `edit` opens `$VISUAL` or `$EDITOR` on a temporary copy of the project's owning file (or of `--file`, a path inside the project folder) and saves it only when the result validates. `remove` deletes the folder after copying each file into the home backups, and needs `--yes`. `enable` and `disable` change the project's opt-in cells in `control-plane.md` and do not touch the manifest status column. A project that has no column yet exits 5 (`msg-1151`): run `stratarc reconcile` first. An unknown project exits 2 (`msg-1106`), an existing one exits 4 (`msg-1147`), a missing `--yes` exits 2 (`msg-1141`) and a missing editor exits 2 (`msg-1140`).
+
+## runtime
+
+```bash
+stratarc runtime list
+stratarc runtime show NAME
+stratarc runtime enable NAME [--dry-run]
+stratarc runtime disable NAME [--dry-run]
+stratarc runtime target NAME PATH [--dry-run]
+```
+
+The supported agent runtimes and where each deploys. `enable`, `disable` and `target` change the `[runtimes.NAME]` table of `stratarc.toml` with a line editor that keeps comments and layout, and refuse the change when anything but the intended value would differ (`msg-1139`). An unknown runtime exits 2 (`msg-1109`) and an empty target exits 2 (`msg-1144`).
+
+## agent
+
+```bash
+stratarc agent list [--project P]
+stratarc agent show NAME [--project P]
+stratarc agent edit NAME [--project P] [--definition] [--dry-run]
+stratarc agent explain NAME [--project P] [--account X] [--runtime R] [--key KEY]
+```
+
+Per-agent settings inside a project or the source root. `edit` opens the agent's settings file, or with `--definition` its `.md` definition, in `$VISUAL` or `$EDITOR` and saves it only when the result validates. `explain` prints where each of the agent's values comes from, the same chain `config explain` prints. An unknown agent exits 2 (`msg-1107`).
+
+## account
+
+```bash
+stratarc account list
+stratarc account show NAME
+stratarc account add NAME [--set KEY=VALUE]... [--dry-run]
+stratarc account edit NAME [--dry-run]
+stratarc account remove NAME [--dry-run] --yes
+```
+
+Named accounts and the settings tied to them, kept as files under `accounts/`. `add` creates the file from the `--set` pairs (strings, integers, booleans or lists of strings). `remove` backs the file up and needs `--yes`. An unknown account exits 2 (`msg-1108`), an existing one exits 4 (`msg-1148`) and a malformed pair exits 2 (`msg-1144`).
+
+The five resources above take the global `--root` and `--json`, accept the options shown after their verbs, and share the rules of every write: the new content is validated before it is saved, the old version is copied into the home backups first, and a file that declares a newer schema is never rewritten. Every write verb takes `--dry-run`, which reports the change and writes nothing. An editor that exits non-zero exits 1 (`msg-1152`).
+
+## ui
+
+```bash
+stratarc ui
+```
+
+Opens the full-screen terminal interface on the source root: a tree of the projects, runtimes, agents and accounts, a detail pane, and keys to edit (`e`), explain (`x`), read the log (`l`), preview a sync (`s`) and verify (`v`). It writes only through the same paths as the commands above and uses no network. The global `--root` sets the source root. The interface needs Textual, installed with `pip install 'stratarc[ui]'`; without it the command prints `msg-1153` and exits 5. `starc` is a second name for the same command line.

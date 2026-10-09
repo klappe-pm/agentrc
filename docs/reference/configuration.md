@@ -10,6 +10,7 @@ This page documents `stratarc.toml`, the file that names the enabled runtimes, t
 | --- | --- | --- | --- |
 | `owner` | string | `""` | the GitHub user or organization login whose repositories count as managed projects; empty treats none as managed by owner |
 | `projects_root` | string | `"~/projects"` | the directory that holds your project checkouts; `~` expands to your home directory |
+| `validate.gate_private` | boolean | `false` | whether the deploy gate also runs the checks in `scripts/private/validate_checks.py`; false gates a deploy on the generic checks only, true makes a failing or broken private check block the sync and names the file |
 | `runtimes.<name>.enabled` | boolean | `true` for `claude`, `false` otherwise | whether `stratarc sync` builds and deploys this runtime |
 | `runtimes.<name>.target` | string | the runtime's conventional directory | the directory the runtime reads its configuration from |
 

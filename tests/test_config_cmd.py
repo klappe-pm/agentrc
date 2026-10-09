@@ -147,3 +147,9 @@ def test_notes_cli_example_key_with_project_overlay(capsys):
     assert "result: true   decided by: project (set)" in out
     assert "projects-root/notes-cli/permissions.json:5" in out
     assert "  base     permissions.json:6" in out
+
+
+def test_notes_cli_example_lists_resolve_for_its_project(capsys):
+    code, out, err = run(capsys, "list", "--project", "notes-cli", root=EXAMPLE)
+    assert code == 0, out + err
+    assert "list-mode-missing" not in out + err

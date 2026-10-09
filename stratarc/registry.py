@@ -17,9 +17,11 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -38,7 +40,6 @@ REQUIRED_KEYS = ("schema_version", "name", "runtime", "supports", "schema", "sou
 SOURCE_SCHEMA_VERSION = 1
 
 OK, OUTDATED, UNSUPPORTED, UNKNOWN = "ok", "outdated", "unsupported", "unknown"
-RUNTIME_COMMANDS = {"claude": "claude", "codex": "codex", "gemini": "gemini", "cursor": "cursor-agent", "opencode": "opencode"}
 
 
 # ---------------------------------------------------------------------------
@@ -121,21 +122,24 @@ def _require_valid_manifest(doc: Any, where: str) -> None:
 def bundled_manifests() -> dict[str, dict[str, Any]]:
     """A manifest per bundled adapter, derived from the adapter modules.
 
-    The runtime and the files written come from each module's `RUNTIME` constant. The bundled adapters declare no runtime version range of their own yet, so `supports` and `schema` start permissive (`*` and the current source schema) and carry no `tested` bound; a contributor narrows them in a registered manifest when a runtime change is captured.
+    The runtime and the files written come from each module's `RUNTIME` constant. `supports` and `tested` come from the table in `stratarc.adapters._supports`; an adapter with no row there (a fixture runtime) stays permissive (`*`, no `tested`).
     """
     from stratarc.adapters._common import runtime_registry
+    from stratarc.adapters._supports import SUPPORTS
 
     manifests: dict[str, dict[str, Any]] = {}
     for name, runtime in runtime_registry().items():
         written = [f"{runtime.relative}/**"]
         if runtime.hook_registry:
             written.insert(0, f"{runtime.relative}/{runtime.hook_registry}")
+        row = SUPPORTS.get(name)
         manifests[name] = {
             "schema_version": layout.SCHEMA_VERSION,
             "name": name,
             "runtime": name,
             "description": f"Translates the source into the {name} runtime.",
-            "supports": "*",
+            "supports": row["supports"] if row else "*",
+            **({"tested": row["tested"]} if row else {}),
             "schema": f">={SOURCE_SCHEMA_VERSION},<{SOURCE_SCHEMA_VERSION + 1}",
             "source_kinds": _bundled_kinds(name),
             "files_written": written,
@@ -181,7 +185,8 @@ def _load_registered() -> dict[str, dict[str, Any]]:
 def list_adapters() -> dict[str, dict[str, Any]]:
     """Every adapter by name: bundled manifests, overridden by registered ones."""
     adapters = bundled_manifests()
-    adapters.update(_load_registered())
+    # A copy that `register_bundled` stored earlier is only a snapshot of the derived manifest, so it never overrides the current derivation (and its ranges).
+    adapters.update({name: doc for name, doc in _load_registered().items() if doc.get("origin") != "bundled"})
     return dict(sorted(adapters.items()))
 
 
@@ -298,21 +303,76 @@ def status(installed_runtime_versions: Mapping[str, str | None], *, schema: int 
     ]
 
 
+DETECT_TIMEOUT_SECONDS = 5
+
+# Variables a detection command may see besides the temporary homes. Anything else, tokens included, is dropped.
+_DETECT_ENV_ALLOWED = ("PATH", "LANG")
+_DETECT_ENV_PREFIXES = ("LC_",)
+# Variables that move a runtime's own directories, all pointed at the temporary home.
+_DETECT_HOME_VARIABLES = (
+    "HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_STATE_HOME",
+    "CODEX_HOME",
+    "GEMINI_CONFIG_DIR",
+    "CURSOR_CONFIG_DIR",
+    "OPENCODE_CONFIG_DIR",
+    "CLAUDE_CONFIG_DIR",
+)
+
+# Detected versions for the life of the process, keyed by runtime and resolved command path. Only the real runner is cached.
+_DETECTED: dict[tuple[str, str], str | None] = {}
+
+
+def _detection_environment(home: str) -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k in _DETECT_ENV_ALLOWED or k.startswith(_DETECT_ENV_PREFIXES)}
+    env.update({"TERM": "dumb", "NO_COLOR": "1", "CI": "1"})
+    env.update({name: home for name in _DETECT_HOME_VARIABLES})
+    return env
+
+
 def detect_versions(runner: Callable[..., Any] | None = None, which: Callable[[str], str | None] | None = None) -> dict[str, str | None]:
-    """Ask each runtime's command for its version. `runner` and `which` are injectable; nothing else touches the system."""
+    """Ask each runtime's command for its version, using the table in `stratarc.adapters._supports`. `runner` and `which` are injectable.
+
+    Each command runs in a fresh temporary home with an allowlisted environment, that directory as its working directory, stdin closed and a hard timeout, so a runtime cannot read the caller's credentials or create files in the caller's home. Any failure of one detection yields None for that runtime. Results of the real runner are cached for the process.
+    """
+    from stratarc.adapters._supports import DETECT
+
     run = runner or subprocess.run
     find = which or shutil.which
     versions: dict[str, str | None] = {}
-    for runtime, command in RUNTIME_COMMANDS.items():
-        versions[runtime] = None
-        if find(command) is None:
-            continue
-        try:
-            result = run([command, "--version"], capture_output=True, text=True, timeout=10)
-        except (OSError, subprocess.SubprocessError):
-            continue
-        parsed = parse_version(getattr(result, "stdout", "") or getattr(result, "stderr", ""))
-        versions[runtime] = ".".join(str(p) for p in parsed) if parsed else None
+    with tempfile.TemporaryDirectory(prefix="stratarc-detect-") as home:
+        env = _detection_environment(home)
+        for runtime, (command, arguments, pattern) in DETECT.items():
+            versions[runtime] = None
+            found = find(command)
+            if found is None:
+                continue
+            key = (runtime, str(found))
+            if runner is None and key in _DETECTED:
+                versions[runtime] = _DETECTED[key]
+                continue
+            try:
+                result = run(
+                    [command, *arguments],
+                    capture_output=True,
+                    text=True,
+                    timeout=DETECT_TIMEOUT_SECONDS,
+                    env=env,
+                    cwd=home,
+                    stdin=subprocess.DEVNULL,
+                )
+                output = f"{getattr(result, 'stdout', '') or ''}\n{getattr(result, 'stderr', '') or ''}"
+                match = re.search(pattern, output)
+                parsed = parse_version(match.group(1)) if match else None
+                detected = ".".join(str(p) for p in parsed) if parsed else None
+            except (OSError, ValueError, subprocess.SubprocessError):
+                detected = None
+            versions[runtime] = detected
+            if runner is None:
+                _DETECTED[key] = detected
     return versions
 
 
