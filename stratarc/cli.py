@@ -16,14 +16,15 @@ import contextlib
 import io
 import json
 import os
+import re
 import sys
 import traceback
 from collections.abc import Callable, Iterator
 from importlib.resources.abc import Traversable
 from pathlib import Path
 
-from stratarc import __version__, paths
-from stratarc.messages import DRIFT, FAILURE, INTERRUPTED, CliError
+from stratarc import __version__, messages, paths
+from stratarc.messages import DRIFT, FAILURE, INTERRUPTED, UNAVAILABLE, CliError
 from stratarc.resources import data_dir
 
 TEMPLATE = "templates/source-root"
@@ -34,6 +35,24 @@ PASSTHROUGH = {
     "projects": "deliver projects-root/ into the managed project checkouts",
     "gen-rules-digest": "render or check the rules digest in instruction files",
     "components": "validate components.json and check declared services",
+}
+
+# Resources whose module prints its own result and error envelope. The command line forwards the arguments, adds --json when the global flag is set, resolves the module's string error code to a catalog message and maps the exit status.
+RESOURCES = {
+    "config": "show the resolved settings and where each value came from",
+    "log": "read and manage the change history",
+    "verify": "check that what the source says is what is deployed",
+    "provider": "manage inference providers",
+    "adapter": "manage the translators from the source to a runtime",
+    "api": "serve the read-only local API, or print its published schema",
+}
+
+# The verbs of each resource that write to the home, so the home is checked first.
+WRITING_VERBS = {
+    "log": {"enable", "disable", "prune"},
+    "verify": {"run"},
+    "provider": {"add", "edit", "remove"},
+    "adapter": {"register", "add", "remove", "deprecate"},
 }
 
 EXIT_NAMES = {
@@ -160,7 +179,28 @@ def cmd_doctor(args: argparse.Namespace) -> tuple[int, dict]:
 
     started_ms = (time.perf_counter() - _LOADED) * 1000
     data, problems = doctor.collect(root_flag=bool(args.global_flags.root), started_ms=started_ms)
-    data["text"] = doctor.render(data, problems)
+    sections = [doctor.render(data, problems)]
+    if args.permissions:
+        data["permissions"] = doctor.permissions_table()
+        sections.append(doctor.render_permissions(data["permissions"]))
+    if args.clean:
+        from stratarc.home_layout import ToolError
+
+        try:
+            data["clean"] = doctor.clean(args.yes)
+        except ToolError as error:
+            raise CliError("msg-1118", param="home", detail=error.message) from error
+        sections.append(doctor.render_clean(data["clean"]))
+    if args.report:
+        from stratarc.home_layout import ToolError
+
+        try:
+            report = doctor.write_report(data, problems)
+        except ToolError as error:
+            raise CliError("msg-1118", param="home", detail=error.message) from error
+        data["report"] = str(report)
+        sections.append(f"report: {data['report']}")
+    data["text"] = "\n".join(sections)
     if problems:
         data["problems"] = [{"code": p.id, "message": p.problem, "hint": p.recovery} for p in problems]
         raise _Reported(problems[0], data)
@@ -209,6 +249,10 @@ def _sync_family_argv(args: argparse.Namespace) -> list[str]:
         argv.append("--list")
     if getattr(args, "dry_run", False):
         argv.append("--dry-run")
+    if getattr(args, "verify", False):
+        argv.append("--verify")
+    if getattr(args, "rollback_on_drift", False):
+        argv.append("--rollback-on-drift")
     if args.only:
         argv += ["--only", args.only]
     for branch in getattr(args, "allow_branch", []):
@@ -261,6 +305,143 @@ def cmd_engine(args: argparse.Namespace, rest: list[str]) -> tuple[int, dict]:
     return code, data
 
 
+_ERROR_LINE = re.compile(r"^error (?P<code>[\w-]+):?\s+(?P<message>.*)$")
+
+
+def _resource_main(resource: str) -> Callable[[list[str] | None], int]:
+    if resource == "config":
+        from stratarc import config_cmd
+
+        return config_cmd.main
+    if resource in ("log", "verify"):
+        from stratarc import log_cmd
+
+        return lambda argv: log_cmd.main([resource, *(argv or [])])
+    if resource == "provider":
+        from stratarc import providers
+
+        return providers.main
+    from stratarc import registry
+
+    return registry.main
+
+
+def _map_error_body(body: dict) -> dict:
+    """The error body of a module's envelope with its string code resolved to the catalog message."""
+    mapped = messages.from_code(str(body.get("code", "")), body.get("message", ""), param=body.get("param"))
+    if mapped is None:
+        return body
+    return _error_body(mapped)
+
+
+def _map_envelope(text: str) -> str:
+    try:
+        body = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(body, dict) or not isinstance(body.get("error"), dict):
+        return text
+    body["error"] = _map_error_body(body["error"])
+    return json.dumps(body, indent=2) + "\n"
+
+
+def _map_error_text(text: str) -> str:
+    """Standard error of a module with a leading `error <code>  <message>` line shown as the catalog message."""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        found = _ERROR_LINE.match(line)
+        if found is None:
+            continue
+        mapped = messages.from_code(found.group("code"), found.group("message"))
+        if mapped is None:
+            return text
+        # The module's hint line, when it wrote one, is replaced by the catalog's recovery.
+        rest = lines[index + 2 :] if index + 1 < len(lines) and lines[index + 1].startswith("  ") else lines[index + 1 :]
+        return "\n".join([*lines[:index], f"error {mapped.id}  {mapped.problem}", f"  {mapped.recovery}", *rest]) + "\n"
+    return text
+
+
+def _print_json_result(args: argparse.Namespace, code: int, text: str, err: str) -> int:
+    """Print exactly one envelope: the module's own, with the error resolved to the catalog, or one built from what the module wrote when it printed none (a usage error, help)."""
+    try:
+        body = json.loads(text)
+    except ValueError:
+        body = None
+    if isinstance(body, dict) and "ok" in body:
+        sys.stdout.write(_map_envelope(text))
+        if err:
+            sys.stderr.write(err)
+        return code
+    lines = err.strip().splitlines()
+    error = None
+    if code:
+        error = {"code": EXIT_NAMES.get(code, "failure"), "message": lines[-1] if lines else f"stratarc {args.command} exited {code}", "param": None, "hint": None}
+    print(_envelope(code == 0, {"stdout": text} if text else None, error))
+    return code
+
+
+def cmd_resource(args: argparse.Namespace, rest: list[str]) -> int:
+    """Forward a resource command to its module and print the result with catalog wording and the mapped status."""
+    resource = args.command
+    asking_for_help = any(flag in rest for flag in ("-h", "--help"))
+    verb = next((token for token in rest if not token.startswith("-")), None)
+    if not asking_for_help:
+        if resource == "verify" and verb == "run":
+            _require_source_root()
+        if verb in WRITING_VERBS.get(resource, set()):
+            _require_writable_home()
+    argv = list(rest) + (["--json"] if args.global_flags.json and not asking_for_help else [])
+    entry = _resource_main(resource)
+    # JSON mode captures the envelope and standard error; text mode captures standard error only, so an interactive prompt on standard output still reaches the terminal.
+    captured = io.StringIO()
+    captured_err = io.StringIO()
+    if args.global_flags.json:
+        with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured_err):
+            raw = _call(entry, argv)
+    else:
+        with contextlib.redirect_stderr(captured):
+            raw = _call(entry, argv)
+    code = raw if raw in (0, *EXIT_NAMES) else FAILURE
+    text = captured.getvalue()
+    if args.global_flags.json:
+        return _print_json_result(args, code, text, captured_err.getvalue())
+    if code == DRIFT and not text.strip():
+        _print_error(CliError("msg-1117", param="drift", detail="run `stratarc verify show` for the files"))
+    if text:
+        sys.stderr.write(_map_error_text(text))
+    return code
+
+
+def cmd_api(args: argparse.Namespace, rest: list[str]) -> int:
+    """Forward `api serve` and `api schema` to the API module.
+
+    The module prints its own output: the schema is already JSON and `serve` announces the address it listens on, so standard output passes through untouched and only standard error is captured, so that a failure shows the catalog wording and, with --json, one error envelope.
+    """
+    from stratarc import api
+
+    asking_for_help = any(flag in rest for flag in ("-h", "--help"))
+    verb = next((token for token in rest if not token.startswith("-")), None)
+    if not asking_for_help and verb == "serve" and not any(token == "--port" or token.startswith("--port=") for token in rest):
+        _require_writable_home()
+    captured = io.StringIO()
+    with contextlib.redirect_stderr(captured):
+        raw = _call(api.main, list(rest))
+    code = raw if raw in (0, *EXIT_NAMES) else FAILURE
+    text = captured.getvalue()
+    if not args.global_flags.json:
+        if text:
+            sys.stderr.write(_map_error_text(text))
+        return code
+    if code:
+        found = next((m for line in text.splitlines() if (m := _ERROR_LINE.match(line))), None)
+        error = {"code": EXIT_NAMES.get(code, "failure"), "message": text.strip().splitlines()[-1] if text.strip() else f"stratarc api exited {code}", "param": None, "hint": None}
+        if found is not None:
+            mapped = messages.from_code(found.group("code"), found.group("message"))
+            error = _error_body(mapped) if mapped is not None else {**error, "code": found.group("code"), "message": found.group("message")}
+        print(_envelope(False, None, error))
+    return code
+
+
 def _call(entry: Callable[[list[str] | None], int], argv: list[str]) -> int:
     """Run a module's main; an argparse exit inside it becomes its return value."""
     try:
@@ -292,9 +473,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_init)
 
     p = sub.add_parser("doctor", help="report the health of the install, the home and the source root")
+    p.add_argument("--permissions", action="store_true", help="also print what each command reads and writes")
+    p.add_argument("--clean", action="store_true", help="also list the old backups and cache the home can shed")
+    p.add_argument("--yes", action="store_true", help="with --clean, remove what it lists")
+    p.add_argument("--report", action="store_true", help="also write a redacted bundle for an issue report under state/debug")
     p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("sync", help="render the source into every enabled runtime and managed project")
+    p.add_argument("verb", nargs="?", choices=["apply"], help="apply is the same as no verb")
+    p.add_argument("--verify", action="store_true", help="after the write, verify the change against what is deployed; exit 6 on drift")
+    p.add_argument("--rollback-on-drift", action="store_true", help="when verification finds drift, restore the runtime files from the home backups (implies --verify)")
     p.add_argument("--only", metavar="RUNTIME", help="sync one runtime and skip project delivery")
     p.add_argument("--allow-branch", action="append", default=[], metavar="BRANCH", help="deploy from this branch too; repeatable")
     p.add_argument("--dry-run", action="store_true", help="print what a sync would change and write nothing")
@@ -316,7 +504,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("reconcile", help="refresh control-plane.md from the source tree")
     p.add_argument("--check", action="store_true", help="report what is stale, write nothing, exit 6 if any")
 
-    for name, text in PASSTHROUGH.items():
+    for name, text in {**PASSTHROUGH, **RESOURCES}.items():
         sub.add_parser(name, help=text, add_help=False)
     return parser
 
@@ -370,7 +558,7 @@ def main(argv: list[str] | None = None) -> int:
     flags, rest = _global_parser().parse_known_args(tokens)
 
     command = rest[0] if rest else None
-    if command in PASSTHROUGH:
+    if command in PASSTHROUGH or command in RESOURCES:
         args = argparse.Namespace(command=command)
         forwarded = rest[1:]
     else:
@@ -380,6 +568,10 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         with _environment(_flag_environment(flags)):
+            if args.command == "api":
+                return cmd_api(args, forwarded)
+            if args.command in RESOURCES:
+                return cmd_resource(args, forwarded)
             if args.command in PASSTHROUGH or not hasattr(args, "func"):
                 code, data = cmd_engine(args, forwarded)
             else:
@@ -394,10 +586,13 @@ def main(argv: list[str] | None = None) -> int:
         print("interrupted", file=sys.stderr)
         return INTERRUPTED
     except Exception as exc:
+        from stratarc import changelog
         from stratarc.config import ConfigError
 
         if isinstance(exc, ConfigError):
             return _finish(args, flags, 2, {}, CliError("msg-1002", param=paths.CONFIG_NAME, detail=exc))
+        if isinstance(exc, changelog.DatabaseUnavailable):
+            return _finish(args, flags, UNAVAILABLE, {}, CliError("msg-1116", param="database", detail=exc))
         if flags.debug:
             traceback.print_exc()
         return _finish(args, flags, FAILURE, {}, CliError("msg-1008", command=args.command, detail=exc))

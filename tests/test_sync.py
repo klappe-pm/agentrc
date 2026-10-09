@@ -11,6 +11,7 @@ import io
 import json
 import os
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -1712,3 +1713,516 @@ class TestSyncRunTouchesOnlyTheRedirectedHome:
         result = self.run(base, source, environment, "--list")
         assert result.returncode == 0
         assert "claude" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# the change log, the adapter gate, the home layout and the post-deploy verification
+# ---------------------------------------------------------------------------
+
+
+class TestChangeRecording:
+    """A write run records its changes while the log is enabled, records nothing while it is off, and never fails because of the log."""
+
+    @pytest.fixture
+    def world(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch):
+        root = tmp_path / "root"
+        root.mkdir()
+        (root / "AGENTS.md").write_text("# agents\n")
+        calls: list[tuple[Path, bool]] = []
+
+        def adapter_sync(source, target, dry_run=False):
+            calls.append((target, dry_run))
+            return ["did write x"]
+
+        steps = stub_steps(monkeypatch, stratarc_home, adapter_sync=adapter_sync)
+        steps.seen["adapter_calls"] = calls
+        return root, steps
+
+    @staticmethod
+    def changes() -> list[dict]:
+        from stratarc import changelog
+
+        return sorted(changelog.query({}, limit=None), key=lambda c: c["ts"])
+
+    def test_an_enabled_run_records_the_base_change_and_the_runtime_it_propagated_to(self, world, monkeypatch) -> None:
+        root, _steps = world
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        code, _out, err = run_main("--root", str(root))
+        assert code == 0, err
+        recorded = {(c["layer"], c["key"]): c for c in self.changes()}
+        base = recorded[("base", "rules-digest")]
+        runtime = recorded[("runtime", "fixture")]
+        assert base["status"] == "written" and base["file"] == "AGENTS.md"
+        assert base["after_digest"].startswith("sha256:")
+        assert runtime["status"] == "propagated"
+        assert runtime["cause_id"] == base["id"]
+        assert runtime["after_digest"].startswith("sha256:")
+        assert runtime["targets"] == [{"runtime": "fixture", "path": str(Path(os.environ["STRATARC_HOME"]) / ".fixture")}]
+
+    def test_a_current_runtime_records_no_runtime_change(self, world, monkeypatch, stratarc_home: Path) -> None:
+        root, _steps = world
+        fixture = sys.modules["s01_fixture_adapter"]
+        fixture.sync = lambda source, target, dry_run=False: []
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root))[0] == 0
+        assert [c for c in self.changes() if c["layer"] == "runtime"] == []
+
+    def test_a_run_with_the_log_off_records_nothing(self, world, monkeypatch, stratarc_home: Path) -> None:
+        from stratarc import changelog
+
+        root, _steps = world
+        monkeypatch.setenv("STRATARC_LOG", "0")
+        assert run_main("--root", str(root))[0] == 0
+        assert not changelog.database_path().exists()
+        assert not changelog.human_log_path().exists()
+        assert not changelog.jsonl_path().exists()
+
+    def test_a_read_only_run_records_nothing(self, world, monkeypatch) -> None:
+        from stratarc import changelog
+
+        root, _steps = world
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root), "--diff")[0] == 0
+        assert not changelog.database_path().exists() and not changelog.human_log_path().exists()
+
+    def test_a_locked_database_does_not_stop_the_sync(self, world, monkeypatch) -> None:
+        import sqlite3
+
+        from stratarc import changelog
+
+        root, _steps = world
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        monkeypatch.setattr(changelog, "BUSY_TIMEOUT", 0.05)
+        monkeypatch.setattr(changelog, "RETRIES", 1)
+        monkeypatch.setattr(changelog, "RETRY_DELAY", 0)
+        changelog.ensure_logs()
+        holder = sqlite3.connect(changelog.database_path(), isolation_level=None)
+        holder.execute("PRAGMA journal_mode = DELETE")
+        holder.execute("BEGIN EXCLUSIVE")
+        try:
+            code, _out, err = run_main("--root", str(root))
+        finally:
+            holder.execute("ROLLBACK")
+            holder.close()
+        assert code == 0, err
+        assert "locked" in err
+        assert any("fixture" in line for line in changelog.tail(50))
+
+    def test_a_failing_record_does_not_stop_the_sync(self, world, monkeypatch) -> None:
+        from stratarc import changelog
+
+        def broken(*_args, **_kwargs):
+            raise RuntimeError("log is broken")
+
+        root, _steps = world
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        monkeypatch.setattr(changelog, "record", broken)
+        code, _out, err = run_main("--root", str(root))
+        assert code == 0, err
+        assert "log is broken" not in err
+
+    def test_the_deploy_record_is_a_base_change_with_a_source_ref(self, world, monkeypatch, tmp_path: Path) -> None:
+        from stratarc import deploy_guard
+
+        root, _steps = world
+        written = tmp_path / "deploy-record.json"
+        written.write_text("{}\n")
+        monkeypatch.setattr(deploy_guard, "write_deploy_record", lambda home, source, environment: written)
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root))[0] == 0
+        record = next(c for c in self.changes() if c["key"] == "deploy-record")
+        assert record["layer"] == "base" and record["status"] == "written"
+        assert record["source_ref"] == "uncommitted"
+        assert record["after_digest"].startswith("sha256:")
+
+    def test_the_validation_refusal_is_recorded_as_failed(self, world, monkeypatch) -> None:
+        root, _steps = world
+        monkeypatch.setattr(sync, "refuse_on_invalid_source", lambda root: 1)
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root))[0] == 1
+        failed = [c for c in self.changes() if c["status"] == "failed"]
+        assert [(c["layer"], c["key"]) for c in failed] == [("base", "validate")]
+
+    def test_the_deploy_guard_refusals_are_recorded_as_failed(self, world, monkeypatch) -> None:
+        from stratarc import deploy_guard
+
+        root, _steps = world
+        monkeypatch.setattr(deploy_guard, "deploy_ref", lambda r: "stable")
+        monkeypatch.setattr(deploy_guard, "branch_refusal", lambda r, allowed=(): "branch main is not allowed")
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root))[0] == 2
+        monkeypatch.setattr(deploy_guard, "branch_refusal", lambda r, allowed=(): None)
+        monkeypatch.setattr(deploy_guard, "unpromoted_refusal", lambda r, ref, remote="origin": "origin/stable differs")
+        assert run_main("--root", str(root))[0] == 2
+        failed = [(c["layer"], c["key"]) for c in self.changes() if c["status"] == "failed"]
+        assert sorted(failed) == [("base", "branch-guard"), ("base", "unpromoted")]
+
+    def test_a_refused_render_is_recorded_as_failed_for_that_runtime(self, world, monkeypatch) -> None:
+        from stratarc.adapters._components import RenderRefused
+
+        def refuse(source, target, dry_run=False):
+            raise RenderRefused("cannot replace")
+
+        root, _steps = world
+        sys.modules["s01_fixture_adapter"].sync = refuse
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root))[0] == 2
+        failed = [c for c in self.changes() if c["status"] == "failed"]
+        assert [(c["layer"], c["key"], c["targets"][0]["runtime"]) for c in failed] == [("runtime", "render-refused", "fixture")]
+
+
+class TestRecordingSteps:
+    """The delegated steps record themselves; each is exercised with its own collaborators replaced."""
+
+    @pytest.fixture(autouse=True)
+    def log_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("STRATARC_LOG", "1")
+
+    @staticmethod
+    def changes() -> list[dict]:
+        from stratarc import changelog
+
+        return changelog.query({}, limit=None)
+
+    def test_the_reconciler_records_one_project_change_per_project(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        root = tmp_path / "root"
+        for name in ("alpha", "beta"):
+            (root / "projects-root" / name).mkdir(parents=True)
+        (root / "control-plane.md").write_text("# plane\n")
+        # Only the reconciler's child process is replaced; the change log's own detector subprocess must stay real.
+        monkeypatch.setattr(sync, "subprocess", types.SimpleNamespace(run=lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")))
+        assert sync.run_reconcile(root, False) == 0
+        found = self.changes()
+        assert sorted(c["projects"][0] for c in found) == ["alpha", "beta"]
+        assert {(c["layer"], c["file"], c["status"]) for c in found} == {("project", "control-plane.md", "written")}
+
+    def test_a_check_run_of_the_reconciler_records_nothing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sync, "subprocess", types.SimpleNamespace(run=lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")))
+        assert sync.run_reconcile(tmp_path, True) == 0
+        assert self.changes() == []
+
+    def test_the_project_delivery_records_each_project(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from stratarc import projects
+
+        (tmp_path / "projects-root" / "alpha").mkdir(parents=True)
+        monkeypatch.setattr(projects, "main", lambda argv: 0)
+        assert sync.run_projects(tmp_path, False) == 0
+        assert sync.run_projects(tmp_path, True) == 0
+        found = self.changes()
+        assert [(c["layer"], c["projects"], c["key"]) for c in found] == [("project", ["alpha"], "delivery")]
+
+    def test_a_failed_project_delivery_records_no_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from stratarc import projects
+
+        (tmp_path / "projects-root" / "alpha").mkdir(parents=True)
+        monkeypatch.setattr(projects, "main", lambda argv: 2)
+        assert sync.run_projects(tmp_path, False) == 2
+        assert self.changes() == []
+
+    def test_the_permission_sweep_records_when_it_acts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from stratarc import project_permissions
+
+        (tmp_path / "permissions.json").write_text("{}\n")
+        monkeypatch.setattr(project_permissions, "refuse_if_stale", lambda root: None)
+        monkeypatch.setattr(project_permissions, "projects_dir", lambda root: tmp_path)
+        monkeypatch.setattr(project_permissions, "sweep", lambda *a, **k: ["wrote x"])
+        assert sync.run_permission_sweep(tmp_path, {"claude": ("m", tmp_path)}, dry_run=False) == (0, ["wrote x"])
+        assert sync.run_permission_sweep(tmp_path, {}, dry_run=True)[0] == 0
+        found = self.changes()
+        assert [(c["layer"], c["file"], c["key"]) for c in found] == [("project", "permissions.json", "permissions")]
+        monkeypatch.setattr(project_permissions, "sweep", lambda *a, **k: [])
+        sync.run_permission_sweep(tmp_path, {}, dry_run=False)
+        assert len(self.changes()) == 1
+
+    def test_the_plugin_ingest_records_the_declaration_and_the_opt_in(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        root = tmp_path / "root"
+        root.mkdir()
+        (root / "components.json").write_text("{}\n")
+        candidate = types.SimpleNamespace(name="p", projects=["alpha"], declared=False)
+        plan = types.SimpleNamespace(candidates=[candidate], notes=[], would_declare=lambda: [])
+        ingest = types.SimpleNamespace(
+            scan=lambda r: plan,
+            declare=lambda r, p: ["declared p"],
+            opt_in=lambda r, p: [],
+            is_linked_worktree=lambda r: False,
+            STABLE_NOTE="",
+        )
+        stub_steps(monkeypatch, stratarc_home, runtime=None)
+        monkeypatch.setattr(sync, "plugin_ingest", lambda: ingest)
+        code, _out, err = run_main("--root", str(root))
+        assert code == 0, err
+        plugin = [c for c in self.changes() if c["key"] == "plugins"]
+        assert len(plugin) == 2
+        assert {(c["layer"], c["file"], tuple(c["projects"])) for c in plugin} == {("base", "components.json", ("alpha",))}
+        assert [c["cause_id"] for c in plugin] == ["", ""]
+
+
+def messages_recovery(message_id: str) -> str:
+    from stratarc import messages
+
+    return messages.CATALOG[message_id].recovery
+
+
+class TestAdapterGate:
+    """sync refuses an unsupported adapter, warns once about an outdated one and leaves read-only runs alone."""
+
+    MANIFEST = {"name": "fixture", "runtime": "fixture", "supports": "*", "schema": ">=1,<2", "source_kinds": [], "files_written": [".fixture/**"]}
+
+    @pytest.fixture
+    def world(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch):
+        from stratarc import registry
+
+        root = tmp_path / "root"
+        root.mkdir()
+        calls: list[bool] = []
+        stub_steps(monkeypatch, stratarc_home, adapter_sync=lambda source, target, dry_run=False: calls.append(dry_run) or [])
+
+        def configure(**manifest) -> None:
+            document = {**self.MANIFEST, **manifest}
+            monkeypatch.setattr(registry, "list_adapters", lambda: {"fixture": document})
+            monkeypatch.setattr(registry, "detect_versions", lambda: {"fixture": "2.0"})
+
+        return root, calls, configure
+
+    def test_an_unsupported_adapter_blocks_the_run_with_status_5(self, world) -> None:
+        root, calls, configure = world
+        configure(supports=">=3")
+        code, _out, err = run_main("--root", str(root))
+        assert code == 5
+        assert "error msg-1114  An adapter does not support this install" in err
+        assert 'The adapter "fixture"' in err and "outside the declared range >=3" in err
+        assert messages_recovery("msg-1114") in err
+        assert calls == []
+
+    def test_a_read_only_run_is_not_gated(self, world) -> None:
+        root, calls, configure = world
+        configure(supports=">=3")
+        assert run_main("--root", str(root), "--diff")[0] == 0
+        assert run_main("--root", str(root), "--check")[0] == 0
+        assert calls == [True, True]
+
+    def test_an_outdated_adapter_warns_once_and_deploys(self, world) -> None:
+        root, calls, configure = world
+        configure(tested="1.0")
+        code, _out, err = run_main("--root", str(root))
+        assert code == 0, err
+        assert err.count("msg-1115") == 1 and "warning msg-1115" in err
+        assert calls == [False]
+
+    def test_the_outdated_warning_is_shown_once_per_run_state(self) -> None:
+        from stratarc import registry
+
+        status = registry.AdapterStatus("fixture", "fixture", registry.OUTDATED, "newer.", "2.0", "*")
+        warned: set[str] = set()
+        assert registry.sync_gate(status, warned).message
+        assert registry.sync_gate(status, warned).message is None
+
+    def test_an_ok_adapter_deploys_silently(self, world) -> None:
+        root, calls, configure = world
+        configure(supports=">=1")
+        code, _out, err = run_main("--root", str(root))
+        assert (code, calls) == (0, [False])
+        assert "outdated" not in err and "support" not in err
+
+    def test_a_registered_manifest_in_the_home_gates_the_bundled_runtime(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from stratarc import registry
+
+        registry.register_bundled()
+        stored = json.loads((stratarc_home / ".stratarc" / "adapters" / "claude" / "manifest.json").read_text())
+        stored["supports"] = ">=99"
+        (stratarc_home / ".stratarc" / "adapters" / "claude" / "manifest.json").write_text(json.dumps(stored))
+        monkeypatch.setattr(registry, "detect_versions", lambda: {"claude": "2.0"})
+        calls: list[bool] = []
+        stub_steps(monkeypatch, stratarc_home, runtime="claude", adapter_sync=lambda source, target, dry_run=False, environment=None: calls.append(dry_run) or [])
+        root = tmp_path / "root"
+        root.mkdir()
+        assert run_main("--root", str(root))[0] == 5
+        assert calls == []
+
+
+class TestHomeLayout:
+    def test_a_write_run_creates_the_layout_and_the_bundled_manifests(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        stub_steps(monkeypatch, stratarc_home)
+        root = tmp_path / "root"
+        root.mkdir()
+        assert run_main("--root", str(root))[0] == 0
+        layout = stratarc_home / ".stratarc"
+        assert sorted(p.name for p in (layout / "adapters").iterdir()) == ["claude", "codex", "cursor", "gemini", "opencode"]
+        assert (layout / "config.toml").is_file() and (layout / "sources.toml").is_file()
+        assert layout.stat().st_mode & 0o777 == 0o700
+
+    @pytest.mark.parametrize("flags", [["--diff"], ["--check"], ["--dry-run"], ["--list"], ["--prune", "--dry-run"]])
+    def test_a_read_only_run_does_not_create_it(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch, flags) -> None:
+        stub_steps(monkeypatch, stratarc_home)
+        monkeypatch.setattr(sync, "run_prune", lambda root, live, dry_run: 0)
+        root = tmp_path / "root"
+        root.mkdir()
+        run_main("--root", str(root), *flags)
+        assert not (stratarc_home / ".stratarc").exists()
+
+    def test_a_second_run_keeps_a_registered_manifest(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        stub_steps(monkeypatch, stratarc_home)
+        root = tmp_path / "root"
+        root.mkdir()
+        run_main("--root", str(root))
+        manifest = stratarc_home / ".stratarc" / "adapters" / "codex" / "manifest.json"
+        manifest.write_text(manifest.read_text().replace('"supports": "*"', '"supports": ">=0"'))
+        run_main("--root", str(root))
+        assert '"supports": ">=0"' in manifest.read_text()
+
+
+class TestVerifyAfterDeploy:
+    """--verify runs the recursive test for the run's change; --rollback-on-drift restores the home backups."""
+
+    @pytest.fixture
+    def world(self, tmp_path: Path, stratarc_home: Path, monkeypatch: pytest.MonkeyPatch):
+        from stratarc import verify
+
+        root = tmp_path / "root"
+        root.mkdir()
+        target = stratarc_home / ".fixture"
+        target.mkdir()
+        (target / "kept.txt").write_text("original\n")
+        scopes: list[str] = []
+
+        def adapter_sync(source, target_, dry_run=False):
+            verb = "would write" if dry_run else "wrote"
+            if not dry_run:
+                (target_ / "kept.txt").write_text("deployed\n")
+                (target_ / "created.txt").write_text("new\n")
+            return [f"{verb} {target_ / 'kept.txt'}", f"{verb} {target_ / 'created.txt'}"]
+
+        stub_steps(monkeypatch, stratarc_home, adapter_sync=adapter_sync)
+
+        def fake_run(scope="all", *, root=None, record=True, actor_kind="human", actor=""):
+            scopes.append(scope)
+            report = verify.Report(id="ver-20260101000000-abc", ts="t", scope=scope, root=str(root))
+            report.files.append({"area": "runtime", "name": "fixture", "file": "kept.txt", "status": fake_run.status, "before_digest": "", "after_digest": "", "detail": "", "target": str(target)})
+            return report
+
+        fake_run.status = verify.VERIFIED
+        monkeypatch.setattr(verify, "run", fake_run)
+        return root, target, scopes, fake_run
+
+    def test_verify_runs_after_the_write_and_exits_0_when_it_matches(self, world, monkeypatch) -> None:
+        root, _target, scopes, _run = world
+        monkeypatch.setenv("STRATARC_LOG", "0")
+        code, out, err = run_main("--root", str(root), "--verify")
+        assert code == 0, err
+        assert scopes == ["all"] and "sync: verify: " in out
+
+    def test_verify_uses_the_runs_change_id_when_the_log_is_on(self, world, monkeypatch) -> None:
+        root, _target, scopes, _run = world
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root), "--verify")[0] == 0
+        assert re.fullmatch(r"change:chg-\d{14}-[0-9a-f]{8}", scopes[0])
+
+    def test_drift_exits_6_with_the_catalog_message_and_keeps_the_files(self, world, monkeypatch) -> None:
+        from stratarc import verify
+
+        root, target, _scopes, run = world
+        run.status = verify.DRIFTED
+        code, _out, err = run_main("--root", str(root), "--verify")
+        assert code == 6
+        assert "msg-1117" in err
+        assert (target / "kept.txt").read_text() == "deployed\n"
+
+    def test_rollback_restores_the_backed_up_file_and_removes_the_created_one(self, world) -> None:
+        from stratarc import verify
+
+        root, target, _scopes, run = world
+        run.status = verify.DRIFTED
+        code, out, err = run_main("--root", str(root), "--rollback-on-drift")
+        assert code == 6, err
+        assert (target / "kept.txt").read_text() == "original\n"
+        assert not (target / "created.txt").exists()
+        assert "rollback: restored" in out and "rollback: removed" in out
+        from stratarc.deploy_guard import stamp_name
+
+        assert not (target / stamp_name(root)).exists()
+
+    def test_rollback_also_puts_back_the_previous_deploy_record(self, world, monkeypatch, tmp_path: Path) -> None:
+        from stratarc import deploy_guard, verify
+
+        root, _target, _scopes, run = world
+        run.status = verify.DRIFTED
+        record = tmp_path / "record.json"
+        record.write_text("previous\n")
+        monkeypatch.setattr(deploy_guard, "deploy_record_path", lambda home, source=None: record)
+
+        def write(home, source, environment):
+            record.write_text("new\n")
+            return record
+
+        monkeypatch.setattr(deploy_guard, "write_deploy_record", write)
+        assert run_main("--root", str(root), "--rollback-on-drift")[0] == 6
+        assert record.read_text() == "previous\n"
+
+    def test_the_change_verified_reaches_the_projects_of_the_run(self, world, monkeypatch) -> None:
+        from stratarc import changelog
+
+        root, _target, scopes, _run = world
+        for name in ("alpha", "beta"):
+            (root / "projects-root" / name).mkdir(parents=True)
+        monkeypatch.setenv("STRATARC_LOG", "1")
+        assert run_main("--root", str(root), "--verify")[0] == 0
+        change = changelog.get(scopes[0].removeprefix("change:"))
+        assert change["key"] == "rules-digest" and change["projects"] == ["alpha", "beta"]
+
+    def test_with_the_log_off_the_all_scope_covers_the_projects(self, world, monkeypatch) -> None:
+        root, _target, scopes, _run = world
+        for name in ("alpha", "beta"):
+            (root / "projects-root" / name).mkdir(parents=True)
+        monkeypatch.setenv("STRATARC_LOG", "0")
+        assert run_main("--root", str(root), "--verify")[0] == 0
+        assert scopes == ["all"]
+
+    def test_verify_cannot_be_combined_with_only(self, world) -> None:
+        root, _target, scopes, _run = world
+        code, _out, err = run_main("--root", str(root), "--verify", "--only", "fixture")
+        assert code == 2 and "--only" in err
+        assert scopes == []
+
+    def test_rollback_keeps_the_file_mode(self, world) -> None:
+        from stratarc import verify
+
+        root, target, _scopes, run = world
+        (target / "kept.txt").chmod(0o755)
+        run.status = verify.DRIFTED
+        run_main("--root", str(root), "--rollback-on-drift")
+        assert (target / "kept.txt").stat().st_mode & 0o777 == 0o755
+
+    def test_no_rollback_happens_when_verification_passes(self, world) -> None:
+        root, target, _scopes, _run = world
+        assert run_main("--root", str(root), "--rollback-on-drift")[0] == 0
+        assert (target / "kept.txt").read_text() == "deployed\n"
+
+    def test_a_missing_backup_exits_5_with_msg_1119(self, world, monkeypatch) -> None:
+        from stratarc import home_layout, verify
+
+        root, target, _scopes, run = world
+        run.status = verify.DRIFTED
+        real = home_layout._backup
+
+        def backup_then_lose(path, now):
+            made = real(path, now)
+            if made is not None:
+                made.unlink()
+            return made
+
+        monkeypatch.setattr(home_layout, "_backup", backup_then_lose)
+        code, _out, err = run_main("--root", str(root), "--rollback-on-drift")
+        assert code == 5
+        assert "msg-1119" in err
+
+    @pytest.mark.parametrize("flags", [["--check"], ["--diff"], ["--list"], ["--prune"]])
+    def test_verify_needs_a_write_run(self, world, flags) -> None:
+        root, _target, scopes, _run = world
+        code, _out, err = run_main("--root", str(root), "--verify", *flags)
+        assert code == 2 and "write run" in err
+        assert scopes == []
+
+    def test_no_verification_without_the_flag(self, world) -> None:
+        root, _target, scopes, _run = world
+        assert run_main("--root", str(root))[0] == 0
+        assert scopes == []

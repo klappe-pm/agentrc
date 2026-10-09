@@ -158,9 +158,9 @@ def test_toml_line_scanner_handles_multiline_values(tmp_path):
 
 
 def test_notes_cli_example_resolves_with_project_overlay():
-    key = "permissions.blockReadsOutsideWorkingDirectories"
-    assert layers.load(EXAMPLE, environ={}).resolve(key).value is False
-    res = layers.load(EXAMPLE, project="notes-cli", environ={}).resolve(key)
+    setting = "permissions.blockReadsOutsideWorkingDirectories"
+    assert layers.load(EXAMPLE, environ={}).resolve(setting).value is False
+    res = layers.load(EXAMPLE, project="notes-cli", environ={}).resolve(setting)
     assert res.value is True
     base, project = res.steps
     assert base.file == EXAMPLE / "permissions.json" and base.line == line_of(base.file, "blockReads")

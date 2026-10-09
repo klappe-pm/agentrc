@@ -116,6 +116,204 @@ def short(p: pathlib.Path) -> str:
     return str(p).replace(str(home()), "~")
 
 
+# ---------------------------------------------------------------------------
+# The change log, the adapter gate and the post-deploy verification. Recording is
+# a no-op while the log is off and never fails a sync.
+# ---------------------------------------------------------------------------
+
+
+@dataclasses.dataclass
+class DeployState:
+    """What one run learns as it goes: the change that caused the rest, the adapters already warned about, and the files it may have to put back."""
+
+    verify: bool = False
+    rollback: bool = False
+    cause_id: str = ""
+    deployed: bool = False
+    warned: set[str] = dataclasses.field(default_factory=set)
+    versions: dict[str, str | None] | None = None
+    backups: dict[pathlib.Path, pathlib.Path | None] = dataclasses.field(default_factory=dict)
+    modes: dict[pathlib.Path, int] = dataclasses.field(default_factory=dict)
+
+
+def _logging_on() -> bool:
+    try:
+        from stratarc import changelog
+
+        return changelog.is_enabled()
+    except Exception:
+        return False
+
+
+def _digest(path: pathlib.Path | str | None) -> str:
+    """The digest of a file for the log, or an empty string when the log is off or the file is absent."""
+    if path is None or not _logging_on():
+        return ""
+    try:
+        from stratarc import verify
+
+        return verify.digest(pathlib.Path(path))
+    except Exception:
+        return ""
+
+
+def _record_change(event: dict) -> str:
+    """Record one change and return its id; an empty string when the log is off or the record failed. A locked database is handled inside the change log, which keeps the event in the files and says so once."""
+    try:
+        from stratarc import changelog
+
+        if not changelog.is_enabled():
+            return ""
+        base = {"actor_kind": "ci" if os.environ.get("CI") else "human", "command": "stratarc sync"}
+        return changelog.record({**base, **event}, enabled=True)
+    except Exception:
+        return ""
+
+
+def _refused(read_only: bool, layer: str, key: str, runtime: str = "", file: str = "") -> None:
+    """Record a refusal of a write as a failed change; a read-only run attempted nothing to refuse."""
+    if read_only:
+        return
+    event: dict = {"layer": layer, "key": key, "file": file, "status": "failed"}
+    if runtime:
+        event["targets"] = [{"runtime": runtime, "path": ""}]
+    _record_change(event)
+
+
+def _project_names(root: pathlib.Path) -> list[str]:
+    source = root / "projects-root"
+    return sorted(p.name for p in source.iterdir() if p.is_dir()) if source.is_dir() else []
+
+
+def _ensure_home() -> int | None:
+    """Create the .stratarc layout and store the bundled adapter manifests, once per writing command. Returns an exit status when the home cannot be used."""
+    from stratarc import home_layout, registry
+
+    try:
+        home_layout.ensure_layout()
+        registry.register_bundled()
+    except home_layout.ToolError as error:
+        print(f"sync: {error.message}", file=sys.stderr)
+        return error.exit
+    return None
+
+
+def _adapter_gate(runtime: str, state: DeployState) -> tuple[bool, list[str]]:
+    """Whether the adapters for this runtime may deploy, and the messages to show. An unsupported adapter blocks; an outdated one warns once per run."""
+    from stratarc import registry
+    from stratarc.messages import CliError
+
+    try:
+        manifests = [m for m in registry.list_adapters().values() if m["runtime"] == runtime]
+    except registry.ToolError as error:
+        return False, [f"error {error.code}  {error.message}"]
+    if state.versions is None and any(m["supports"] != "*" or m.get("tested") for m in manifests):
+        state.versions = registry.detect_versions()
+    installed = (state.versions or {}).get(runtime)
+    allowed, shown = True, []
+    for manifest in manifests:
+        status = registry.evaluate(manifest, installed)
+        decision = registry.sync_gate(status, state.warned)
+        allowed = allowed and decision.allowed
+        if decision.message:
+            blocked = decision.state == registry.UNSUPPORTED
+            message = CliError("msg-1114" if blocked else "msg-1115", param="adapter", detail=f'The adapter "{status.name}": {status.detail}')
+            shown.append(f"{'error' if blocked else 'warning'} {message.id}  {message.problem}\n  {message.recovery}")
+    return allowed, shown
+
+
+def _reached_projects(root: pathlib.Path) -> list[str]:
+    """The projects a sync of this root delivers to: the control plane's when it lists any, else the folders under projects-root."""
+    try:
+        from stratarc.control_plane import ControlPlane
+
+        plane = ControlPlane.load(root / "control-plane.md")
+        if plane.rows:
+            return list(plane.projects())
+    except Exception:
+        pass
+    return _project_names(root)
+
+
+def _remember(path: pathlib.Path, state: DeployState) -> None:
+    """Copy a file into the home backups before the run changes it, or note that the run will create it."""
+    from stratarc import home_layout
+
+    if path in state.backups:
+        return
+    if path.is_file():
+        state.modes[path] = path.stat().st_mode & 0o7777
+        state.backups[path] = home_layout._backup(path, None)
+    else:
+        state.backups[path] = None
+
+
+def _back_up_planned(adapter, name: str, stage: pathlib.Path, target: pathlib.Path, root: pathlib.Path, state: DeployState) -> None:
+    """Remember every deployed file the adapter is about to change, and the runtime's deploy stamp."""
+    from stratarc import verify
+    from stratarc.deploy_guard import stamp_name
+
+    actions = verify._sync_call(adapter, name, stage, target, root, dry_run=True)
+    named, _unplaced = verify._drifted_paths(actions, target)
+    for rel in sorted(named):
+        _remember(target / rel, state)
+    _remember(target / stamp_name(root), state)
+
+
+def _roll_back(state: DeployState) -> bool:
+    """Put back every file the run backed up and remove the ones it created. Returns False when a backup is missing."""
+    from stratarc.messages import CliError
+
+    complete = True
+    for path, backup in state.backups.items():
+        try:
+            if backup is None:
+                path.unlink(missing_ok=True)
+                print(f"sync: rollback: removed {short(path)}")
+            elif backup.is_file():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(backup.read_bytes())
+                if path in state.modes:
+                    path.chmod(state.modes[path])
+                print(f"sync: rollback: restored {short(path)}")
+            else:
+                complete = False
+                error = CliError("msg-1119", param="backup", path=short(path))
+                print(f"error {error.id}  {error.problem}\n  {error.recovery}", file=sys.stderr)
+        except OSError as error:
+            complete = False
+            print(f"sync: rollback: {short(path)}: {error.strerror or error}", file=sys.stderr)
+    return complete
+
+
+def _verify_deployment(root: pathlib.Path, state: DeployState) -> int:
+    """Run the recursive write-back test for this run's change; roll back from the home backups on drift when asked."""
+    from stratarc import verify
+    from stratarc.messages import DRIFT, UNAVAILABLE, CliError
+
+    actor_kind = "ci" if os.environ.get("CI") else "human"
+    reports = []
+    try:
+        scope = f"change:{state.cause_id}" if state.cause_id else "all"
+        try:
+            reports.append(verify.run(scope, root=root, actor_kind=actor_kind))
+        except verify.VerifyError:
+            reports.append(verify.run("all", root=root, actor_kind=actor_kind))
+    except verify.VerifyError as error:
+        print(f"sync: verify: {error}", file=sys.stderr)
+        return 2
+    for report in reports:
+        print("sync: verify: " + verify.format_report(report.to_dict()).replace("\n", "\nsync: verify: "))
+    drifted = sum(report.counts[verify.DRIFTED] for report in reports)
+    if not drifted:
+        return 0
+    drift = CliError("msg-1117", param="drift", detail=f"{drifted} file(s)")
+    print(f"error {drift.id}  {drift.problem}\n  {drift.recovery}", file=sys.stderr)
+    if state.rollback and not _roll_back(state):
+        return UNAVAILABLE
+    return DRIFT
+
+
 def present_action(action: str, stage: pathlib.Path) -> str:
     """An adapter's action line as the operator reads it: the deployed path, never a staging path.
 
@@ -788,6 +986,21 @@ def run_reconcile(root: pathlib.Path, check: bool) -> int:
         env=child_environment(root),
     )
     emit_process_output(result)
+    if not check and result.returncode == 0:
+        # The reconciler rewrites control-plane.md and the snapshot in each active project.
+        after = _digest(root / "control-plane.md")
+        names = _project_names(root)
+        for name in names or [""]:
+            _record_change(
+                {
+                    "file": "control-plane.md",
+                    "layer": "project" if name else "base",
+                    "key": "reconcile",
+                    "after_digest": after,
+                    "status": "written",
+                    "projects": [name] if name else [],
+                }
+            )
     return result.returncode
 
 
@@ -796,7 +1009,11 @@ def run_projects(root: pathlib.Path, check: bool) -> int:
     from stratarc import projects
 
     argv = ["--skip-reconcile", "--root", str(root)] + (["--check"] if check else [])
-    return _call(projects.main, argv)
+    code = _call(projects.main, argv)
+    if not check and code == 0:
+        for name in _project_names(root):
+            _record_change({"file": f"projects-root/{name}", "layer": "project", "key": "delivery", "status": "written", "projects": [name]})
+    return code
 
 
 def run_permission_sweep(root: pathlib.Path, live, *, dry_run: bool) -> tuple[int, list[str]]:
@@ -816,6 +1033,8 @@ def run_permission_sweep(root: pathlib.Path, live, *, dry_run: bool) -> tuple[in
     except RuntimeError as error:
         print(f"sync: permissions: {error}", file=sys.stderr)
         return 2, []
+    if acts and not dry_run:
+        _record_change({"file": "permissions.json", "layer": "project", "key": "permissions", "after_digest": _digest(root / "permissions.json"), "status": "written"})
     return 0, list(acts)
 
 
@@ -844,6 +1063,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="BRANCH",
         help="deploy from this branch in addition to the environment's ref; repeatable",
     )
+    ap.add_argument("--verify", action="store_true", help="after the write, verify this run's change against what is deployed; exit 6 on drift")
+    ap.add_argument("--rollback-on-drift", action="store_true", help="when verification finds drift, restore the runtime files from the home backups (implies --verify)")
     ap.add_argument(
         "--root",
         metavar="PATH",
@@ -860,6 +1081,15 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run(args: argparse.Namespace, root: pathlib.Path) -> int:
+    rollback = bool(getattr(args, "rollback_on_drift", False))
+    state = DeployState(verify=bool(getattr(args, "verify", False)) or rollback, rollback=rollback)
+    code = _run(args, root, state)
+    if code == 0 and state.verify and state.deployed:
+        return _verify_deployment(root, state)
+    return code
+
+
+def _run(args: argparse.Namespace, root: pathlib.Path, state: DeployState) -> int:
     from stratarc.config import ConfigError, load_config
 
     diff = args.diff or (args.dry_run and not args.prune)
@@ -872,6 +1102,12 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
     # A read-only run: --check reports drift and exits 1 on it, --diff prints
     # what would change and exits 0. Neither writes anything.
     read_only = args.check or diff
+    if state.verify and (read_only or args.prune or args.list):
+        print("sync: --verify and --rollback-on-drift apply to a write run, not --check, --diff, --prune or --list", file=sys.stderr)
+        return 2
+    if state.verify and args.only:
+        print("sync: --verify and --rollback-on-drift check the whole deployment, so they cannot be combined with --only", file=sys.stderr)
+        return 2
 
     try:
         runtimes = load_runtimes(root=root)
@@ -899,11 +1135,13 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
             ref = deploy_ref(root)
         except UnknownEnvironment as error:
             print(f"sync: {error}", file=sys.stderr)
+            _refused(read_only, "base", "environment", file="components.json")
             return 2
         if ref is not None:
             branch_bad = branch_refusal(root, (ref, *args.allow_branch))
             if branch_bad is not None:
                 print(f"sync: {branch_bad}", file=sys.stderr)
+                _refused(read_only, "base", "branch-guard", file="components.json")
                 return 2
             if ref == "stable":
                 branch = source_branch(root)
@@ -912,9 +1150,10 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
                 promoted_bad = unpromoted_refusal(root, ref)
                 if promoted_bad is not None:
                     print(f"sync: {promoted_bad}", file=sys.stderr)
+                    _refused(read_only, "base", "unpromoted", file="components.json")
                     return 2
 
-    live = {k: v for k, v in detected(runtimes).items() if k not in disabled}
+    live ={k: v for k, v in detected(runtimes).items() if k not in disabled}
     if args.only:
         if args.only not in runtimes:
             print(
@@ -926,9 +1165,15 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
 
     if args.list:
         for name, (mod, target) in runtimes.items():
-            state = "installed" if target.is_dir() else "absent"
-            print(f"{name:10s} {short(target):28s} {state}")
+            presence = "installed" if target.is_dir() else "absent"
+            print(f"{name:10s} {short(target):28s} {presence}")
         return 0
+
+    # The first writing command lays out the .stratarc home and stores the bundled adapter manifests; a read-only run touches nothing.
+    if not read_only and not args.dry_run:
+        unusable = _ensure_home()
+        if unusable is not None:
+            return unusable
 
     if args.prune:
         return run_prune(root, live, dry_run=args.dry_run)
@@ -939,6 +1184,7 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
     # and --diff too.
     refusal = refuse_on_invalid_source(root)
     if refusal is not None:
+        _refused(read_only, "base", "validate", file="(source root)")
         return refusal
 
     # A plugin the operator added by hand to one project is declared in
@@ -967,15 +1213,30 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
             if ingest_on_stable and not read_only:
                 print(f"sync: {ingest.STABLE_NOTE}", file=sys.stderr)
         if ingest_writes:
+            components_before = _digest(root / "components.json")
             try:
                 for line in ingest.declare(root, ingest_plan):
                     print(f"sync: {line}")
             except ValueError as error:
                 print(f"sync: plugins: {error}", file=sys.stderr)
+                _refused(read_only, "base", "plugins", file="components.json")
                 return 2
+            _record_change(
+                {
+                    "command": "stratarc sync (plugin declare)",
+                    "file": "components.json",
+                    "layer": "base",
+                    "key": "plugins",
+                    "before_digest": components_before,
+                    "after_digest": _digest(root / "components.json"),
+                    "status": "written",
+                    "projects": sorted({project for candidate in ingest_plan.candidates for project in candidate.projects}),
+                }
+            )
 
     reconciled = run_reconcile(root, read_only)
     if reconciled and not (diff and reconciled == 1):
+        _refused(read_only, "project", "reconcile", file="control-plane.md")
         return reconciled
 
     if ingest_writes:
@@ -987,21 +1248,49 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
             print(f"sync: {line}", file=sys.stderr)
         if failures:
             print("sync: plugins: refusing to deploy projects; fix the above and run sync again", file=sys.stderr)
+            _refused(read_only, "base", "plugins", file="components.json")
             return 2
+        _record_change(
+            {
+                "command": "stratarc sync (plugin opt-in)",
+                "file": "components.json",
+                "layer": "base",
+                "key": "plugins",
+                "after_digest": _digest(root / "components.json"),
+                "status": "written",
+                "projects": sorted({project for candidate in ingest_plan.candidates for project in candidate.projects}),
+            }
+        )
 
     if not read_only:
+        agents_before = _digest(root / "AGENTS.md")
         try:
             for line in regenerate_derived(root):
                 print("sync:", line)
         except RuntimeError as exc:
             print(f"sync: {exc}", file=sys.stderr)
+            _refused(read_only, "base", "rules-digest", file="AGENTS.md")
             return 2
+        # The rules digest is the base change every runtime and project write that follows propagates, so it is the cause they share and the change a verification of this run walks from.
+        state.cause_id = _record_change(
+            {
+                "command": "stratarc sync (derived files)",
+                "file": "AGENTS.md",
+                "layer": "base",
+                "key": "rules-digest",
+                "before_digest": agents_before,
+                "after_digest": _digest(root / "AGENTS.md"),
+                "status": "written",
+                "projects": [] if args.only or not _logging_on() else _reached_projects(root),
+            }
+        )
         if ref == "stable" and not explicit_branch_override:
             from stratarc.deploy_guard import unpromoted_refusal
 
             promoted_bad = unpromoted_refusal(root, ref)
             if promoted_bad is not None:
                 print(f"sync: {promoted_bad}", file=sys.stderr)
+                _refused(read_only, "base", "unpromoted", file="components.json")
                 return 2
 
     from stratarc.control_plane import ControlPlane
@@ -1019,6 +1308,7 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
         canonical_policy = load_permissions(root)
     except ValueError as error:
         print(f"sync: {error}", file=sys.stderr)
+        _refused(read_only, "base", "permissions", file="permissions.json")
         return 2
     canonical_version = _policy_version_of(canonical_policy)
     missing_roots = unmanaged_runtime_targets(canonical_policy, live)
@@ -1028,6 +1318,7 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
                 f"sync: {name}: missing runtimeDirectories entry for {short(target)}",
                 file=sys.stderr,
             )
+            _refused(read_only, "runtime", "runtime-directories", runtime=name, file="permissions.json")
         return 2
 
     stage, notes = build_stage(root, cp, "global")
@@ -1036,6 +1327,7 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
 
     stale_any = False
     unsupported = False
+    gated = False
     reverse_findings: dict[str, list[Finding]] | None = None
     try:
         for name, (mod, target) in live.items():
@@ -1045,6 +1337,7 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
                     f"sync: {name}: missing hook mappings for {', '.join(sorted(gaps))}",
                     file=sys.stderr,
                 )
+                _refused(read_only, "runtime", "hook-mappings", runtime=name)
                 unsupported = True
                 continue
             try:
@@ -1054,18 +1347,30 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
                     f"sync: {name}: adapter missing ({e.name}); skipped",
                     file=sys.stderr,
                 )
+                _refused(read_only, "runtime", "adapter-missing", runtime=name)
                 unsupported = True
                 continue
-            from stratarc.deploy_guard import refusal as _deploy_refusal, write_stamp
+            from stratarc.deploy_guard import refusal as _deploy_refusal, stamp_name, write_stamp
 
             stale_bad = _deploy_refusal(target, canonical_version, root)
             if stale_bad is not None:
                 print(f"sync: {name}: {stale_bad}", file=sys.stderr)
+                _refused(read_only, "runtime", "stale-deploy", runtime=name)
                 unsupported = True
                 continue
+            if not read_only:
+                allowed, shown = _adapter_gate(name, state)
+                for line in shown:
+                    print(line, file=sys.stderr)
+                if not allowed:
+                    _refused(read_only, "runtime", "adapter-unsupported", runtime=name)
+                    gated = True
+                    continue
             from stratarc.adapters._components import RenderRefused, notes as component_notes
 
             try:
+                if state.rollback and not read_only:
+                    _back_up_planned(adapter, name, stage, target, root, state)
                 if name == "claude":
                     from stratarc.deploy_guard import selected_environment
 
@@ -1077,6 +1382,7 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
                 # safely: this runtime fails and stays unstamped, the
                 # others still sync.
                 print(f"sync: {name}: {refused}", file=sys.stderr)
+                _refused(read_only, "runtime", "render-refused", runtime=name)
                 unsupported = True
                 continue
             # A selected component this runtime's adapter cannot render is
@@ -1092,7 +1398,20 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
             stale_any = True
             head = "would" if read_only else "did"
             if not read_only:
-                write_stamp(target, canonical_version, root)
+                stamp_before = _digest(target / stamp_name(root))
+                stamp = write_stamp(target, canonical_version, root)
+                _record_change(
+                    {
+                        "file": stamp_name(root),
+                        "layer": "runtime",
+                        "key": name,
+                        "before_digest": stamp_before,
+                        "after_digest": _digest(stamp),
+                        "status": "propagated",
+                        "targets": [{"runtime": name, "path": str(target)}],
+                        "cause_id": state.cause_id,
+                    }
+                )
             print(f"sync: {name} ({short(target)}) {head}:")
             for a in actions:
                 print(f"  {present_action(a, stage)}")
@@ -1105,6 +1424,8 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
     finally:
         cleanup_all()
 
+    if gated:
+        return 5
     if unsupported:
         return 2
 
@@ -1119,10 +1440,12 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
     if not args.only:
         delivered = run_projects(root, read_only)
         if delivered and not (diff and delivered == 1):
+            _refused(read_only, "project", "delivery", file="projects-root")
             return delivered
 
     status, acts = run_permission_sweep(root, live, dry_run=read_only)
     if status:
+        _refused(read_only, "project", "permissions", file="permissions.json")
         return status
     if not acts:
         print("sync: permissions: current")
@@ -1139,9 +1462,27 @@ def run(args: argparse.Namespace, root: pathlib.Path) -> int:
     if not read_only and not args.only:
         from stratarc.deploy_guard import selected_environment, write_deploy_record
 
+        if state.rollback:
+            from stratarc.deploy_guard import deploy_record_path
+
+            _remember(deploy_record_path(home(), root), state)
         recorded = write_deploy_record(home(), root, selected_environment(root))
         if recorded is not None:
             print(f"sync: deployed commit recorded in {short(recorded)}")
+            from stratarc.deploy_guard import source_commit
+
+            _record_change(
+                {
+                    "file": short(recorded),
+                    "layer": "base",
+                    "key": "deploy-record",
+                    "after_digest": _digest(recorded),
+                    "status": "written",
+                    "source_ref": (source_commit(root) if _logging_on() else "") or "uncommitted",
+                    "cause_id": state.cause_id,
+                }
+            )
+    state.deployed = not read_only
     return 0
 
 

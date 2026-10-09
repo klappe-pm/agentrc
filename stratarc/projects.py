@@ -103,6 +103,7 @@ from importlib.resources import as_file
 from stratarc import paths
 from stratarc.adapters import _components
 from stratarc.control_plane import ControlPlane, _cells, _option_id
+from stratarc.messages import CliError
 from stratarc.paths import home
 from stratarc.reconcile import main as reconcile_main
 from stratarc.public_targets import PublicTargetsUnreadable, is_public_checkout, load_public_targets
@@ -1668,10 +1669,8 @@ def _read_settings(settings_path: pathlib.Path, name: str) -> dict:
     try:
         return json.loads(settings_path.read_text())
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        raise ProjectRefused(
-            f"refusing project {name}; {short(settings_path)} is not valid JSON ({error}); "
-            "fix or remove the file and run again; nothing was delivered to this project"
-        ) from error
+        refusal = CliError("msg-1120", param="settings", name=name, path=short(settings_path), detail=error)
+        raise ProjectRefused(f"{refusal.id}  {refusal.problem} {refusal.recovery}") from error
 
 
 def sync_project(name: str, dry: bool, cp=None) -> list[str]:
