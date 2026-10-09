@@ -1,15 +1,18 @@
 """Reads `agentrc.toml` from a source root.
 
-The file holds three things: a `[runtimes.<name>]` table per runtime with `enabled` and `target`, a `projects_root` directory and a GitHub `owner`. A missing file yields the defaults; a malformed one raises `ConfigError` naming the file.
+The file holds four things: a `[runtimes.<name>]` table per runtime with `enabled` and `target`, a `projects_root` directory, a GitHub `owner` and the engine `name` (default `agentrc`). A missing file yields the defaults; a malformed one raises `ConfigError` naming the file.
 """
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentrc.paths import CONFIG_NAME, home
+from agentrc.paths import CONFIG_NAME, DEFAULT_NAME, home
+
+_NAME_PATTERN = re.compile(r"[a-z][a-z0-9-]*")
 
 
 class ConfigError(Exception):
@@ -27,6 +30,12 @@ class Config:
     runtimes: dict[str, RuntimeConfig] = field(default_factory=dict)
     projects_root: Path | None = None
     owner: str = ""
+    name: str = DEFAULT_NAME
+
+
+def validate_name(value: object) -> bool:
+    """True when `value` is a non-empty string matching `^[a-z][a-z0-9-]*$`."""
+    return isinstance(value, str) and _NAME_PATTERN.fullmatch(value) is not None
 
 
 def _expand(value: str) -> Path:
@@ -77,7 +86,12 @@ def load_config(root: Path) -> Config:
     if not isinstance(owner, str):
         raise _fail(path, "owner must be a string")
 
+    name = data.get("name", DEFAULT_NAME)
+    if not validate_name(name):
+        raise _fail(path, "name must be a non-empty string matching ^[a-z][a-z0-9-]*$")
+
     return Config(
+        name=name,
         runtimes=runtimes,
         projects_root=_expand(projects) if projects else None,
         owner=owner.strip(),

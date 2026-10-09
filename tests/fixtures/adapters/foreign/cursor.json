@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "postToolUse": [
+      {
+        "command": "reviewbot hook run --agent cursor '--source=reviewbot-hook'",
+        "matcher": "Shell",
+        "timeout": 10,
+        "type": "command"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "reviewbot hook run --agent cursor '--source=reviewbot-hook'",
+        "failClosed": true,
+        "matcher": "Shell",
+        "timeout": 10,
+        "type": "command"
+      }
+    ],
+    "stop": [
+      {
+        "command": "reviewbot hook run --agent cursor '--source=reviewbot-hook'",
+        "timeout": 10,
+        "type": "command"
+      }
+    ]
+  },
+  "version": 1
+}

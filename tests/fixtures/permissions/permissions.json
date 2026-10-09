@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "defaultMode": "bypassPermissions",
+  "additionalDirectories": ["~/projects"],
+  "runtimeDirectories": ["~/.claude"],
+  "allow": ["Bash(gh *)", "Bash(git *)", "Read(//tmp/**)"],
+  "deny": ["Bash(gh repo delete *)", "Bash(gh project delete *)", "Edit(//etc/**)"],
+  "ask": [],
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Every GitHub CLI action is routine on a repository the user owns. Deleting a repository or a GitHub project is prohibited, whether spelled gh repo delete, gh project delete, or a gh api DELETE call against the repository or the project itself."
+    ]
+  }
+}

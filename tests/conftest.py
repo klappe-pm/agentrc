@@ -23,6 +23,12 @@ def tree_snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
+@pytest.fixture(autouse=True)
+def no_engine_name_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep an ambient AGENTRC_NAME from changing the default name a test expects."""
+    monkeypatch.delenv("AGENTRC_NAME", raising=False)
+
+
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT

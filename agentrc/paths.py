@@ -1,6 +1,6 @@
 """Where agentrc finds the home directory, the source root and the projects root.
 
-This module and `agentrc.config` are the only places that read `AGENTRC_HOME`, `AGENTRC_SOURCE`, `LLM_ROOT_PROJECTS_DIR` and `AGENTRC_GITHUB_OWNER`. Every function reads the environment when it is called, never at import, so a test or a command line flag can redirect them after the module is loaded.
+This module and `agentrc.config` are the only places that read `AGENTRC_HOME`, `AGENTRC_SOURCE`, `LLM_ROOT_PROJECTS_DIR`, `AGENTRC_NAME` and `AGENTRC_GITHUB_OWNER`. Every function reads the environment when it is called, never at import, so a test or a command line flag can redirect them after the module is loaded.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ HOME_VARIABLE = "AGENTRC_HOME"
 SOURCE_VARIABLE = "AGENTRC_SOURCE"
 PROJECTS_VARIABLE = "LLM_ROOT_PROJECTS_DIR"
 OWNER_VARIABLE = "AGENTRC_GITHUB_OWNER"
+NAME_VARIABLE = "AGENTRC_NAME"
+DEFAULT_NAME = "agentrc"
 
 
 def _env(name: str) -> str:
@@ -48,12 +50,37 @@ def source_root(explicit: Path | None = None) -> Path:
     return cwd
 
 
-def projects_root() -> Path:
-    """The directory that holds project checkouts: `LLM_ROOT_PROJECTS_DIR`, else `<home>/projects/active`."""
+def projects_root(explicit: Path | None = None, root: Path | None = None) -> Path:
+    """The directory that holds project checkouts.
+
+    Precedence: the explicit argument (a command line flag), then `LLM_ROOT_PROJECTS_DIR`, then `projects_root` in the source root's `agentrc.toml`, then `<home>/projects/active`.
+    """
+    if explicit is not None:
+        return Path(explicit).expanduser()
     value = _env(PROJECTS_VARIABLE)
     if value:
         return Path(value).expanduser()
+    from agentrc.config import load_config
+
+    configured = load_config(source_root(root)).projects_root
+    if configured is not None:
+        return configured
     return home() / "projects" / "active"
+
+
+def engine_name(root: Path | None = None) -> str:
+    """The name the engine puts on everything it generates and records.
+
+    Precedence: `AGENTRC_NAME`, then `name` in the source root's `agentrc.toml`, then `agentrc`. Marker comments, permission profile names, ledger and stamp file names and git config keys are all derived from it. A malformed `AGENTRC_NAME` raises `ConfigError`.
+    """
+    from agentrc.config import ConfigError, load_config, validate_name
+
+    value = _env(NAME_VARIABLE)
+    if value:
+        if not validate_name(value):
+            raise ConfigError(f"{NAME_VARIABLE}: name must match ^[a-z][a-z0-9-]*$")
+        return value
+    return load_config(source_root(root)).name
 
 
 def github_owner(root: Path | None = None) -> str:
