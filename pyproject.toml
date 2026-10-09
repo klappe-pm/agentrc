@@ -15,9 +15,11 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest", "jsonschema"]
+ui = ["textual>=8.2.0"]
 
 [project.scripts]
 stratarc = "stratarc.cli:main"
+starc = "stratarc.cli:main"
 
 [project.urls]
 Repository = "https://github.com/klappe-pm/stratarc"
