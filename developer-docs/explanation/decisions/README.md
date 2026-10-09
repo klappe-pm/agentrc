@@ -24,6 +24,8 @@ Source root and deployment:
 - [projects root from config](2026-10-09-projects-root-from-config.md)
 - [diff is a read-only full render](2026-10-09-diff-is-a-read-only-full-render.md)
 - [verify defines drift as a dry run](2026-10-09-verify-defines-drift-as-a-dry-run.md)
+- [sync verifies and rolls back on drift](2026-10-09-sync-verifies-and-rolls-back-on-drift.md)
+- [sync records changes at its write points](2026-10-09-sync-records-changes-at-its-write-points.md)
 
 Settings, registries and state:
 
@@ -40,6 +42,7 @@ Command line and interfaces:
 - [exit code map](2026-10-09-exit-code-map.md)
 - [message catalog with ids](2026-10-09-message-catalog-with-ids.md)
 - [read-only local API](2026-10-09-read-only-local-api.md)
+- [local API safeguards](2026-10-09-local-api-safeguards.md)
 - [terminal UI library is open](2026-10-09-terminal-ui-library-is-open.md)
 - [CLI design is delivered in ordered slices](2026-10-09-cli-design-is-delivered-in-ordered-slices.md)
 - [first run is a choice, not a scan](2026-10-09-first-run-is-a-choice-not-a-scan.md)
