@@ -112,6 +112,12 @@ Without `--json`, an error prints two lines to standard error: the id and the pr
 | `msg-1152` | 1 | The editor did not finish. | Check `$EDITOR`, then run the command again, nothing was saved. |
 | `msg-1153` | 5 | The terminal interface needs Textual, which is not installed. | Install it with `pip install 'stratarc[ui]'`, then run `stratarc ui` again. |
 | `msg-1154` | 4 | The change conflicts with what already exists. | Resolve the conflict, or choose another name or path, then run the command again. |
+| `msg-1155` | 4 | The agent already exists. | Change it with `stratarc agent edit`, or pick another name. |
+| `msg-1156` | 2 | The agents relay to each other in a loop. | Remove one `parent` so the chain ends at an agent with no parent. |
+| `msg-1157` | 2 | The relay chain of the agent is too long. | Shorten the chain, or give the child the settings directly. |
+| `msg-1158` | 2 | An agent's `parent` or `relay` is not valid. | Name an existing agent in `parent` and give `relay` an `inherit` list of key patterns, or remove the key. |
+| `msg-1159` | 2 | A `--set`, `--set-json` or `--set-mode` flag is not valid. | Write `KEY=VALUE`, quote JSON for your shell, and pass `--set-mode` only with the `--set` or `--set-json` that sets the key. |
+| `msg-1160` | 5 | The terminal interface needs a terminal, and its input or output is redirected. | Run `stratarc ui` in an interactive terminal, or use the commands that print text, such as `stratarc config list`. |
 
 ## init
 
@@ -219,12 +225,16 @@ Validates `components.json`. `--list` prints what is declared, `--services` chec
 ## config
 
 ```bash
-stratarc config get KEY [--project P] [--agent A] [--account X] [--runtime R]
-stratarc config list [--project P] [--agent A] [--account X] [--runtime R]
-stratarc config explain (KEY | --tree --project P) [--agent A] [--account X] [--runtime R]
+stratarc config get KEY [--project P] [--agent A] [--account X] [--runtime R] [FLAGS]
+stratarc config list [--project P] [--agent A] [--account X] [--runtime R] [FLAGS]
+stratarc config explain (KEY | --tree --project P) [--agent A] [--account X] [--runtime R] [FLAGS]
 ```
 
 Reads the layered settings (base, runtime, account, project, agent, environment, flags) and never writes. `get` prints the resolved value of one key, or the nested table under a prefix. `list` prints every resolved key. `explain` prints the chain for a key with the file and line of every layer that set it, which layer decided the result and why, or with `--tree` the outline of everything a project changes. The command forwards every argument to the module's parser, so `stratarc config --help` shows the full usage. An unresolvable key or an unreadable layer file exits 2 with one of `msg-1101` to `msg-1111`.
+
+`FLAGS` is the top layer, for this one command and written nowhere: `--set KEY=VALUE` sets a key to a literal string, `--set-json KEY=JSON` sets it to a JSON value, and `--set-mode KEY=MODE` (`replace` or `extend`) says how a `--set-json` list that redefines a list combines with the lists below it. Each is repeatable. A malformed pair, invalid JSON, or a `--set-mode` with no `--set` or `--set-json` for the key exits 2 (`msg-1159`).
+
+When `--agent` names an agent with a `parent`, `explain` also prints the dispatch relay: each child to parent edge with its `inherit` patterns, the parent that supplied each inherited key, the values the child did not take, and where the account came from. A loop in the chain exits 2 (`msg-1156`), a chain longer than 8 agents exits 2 (`msg-1157`), and a malformed `parent` or `relay` exits 2 (`msg-1158`). The full output is in [config](config.md).
 
 ## log
 
@@ -328,11 +338,13 @@ The supported agent runtimes and where each deploys. `enable`, `disable` and `ta
 ```bash
 stratarc agent list [--project P]
 stratarc agent show NAME [--project P]
+stratarc agent add NAME [--parent P] [--tools TOOL...] [--description TEXT] [--dry-run]
+stratarc agent remove NAME [--project P] [--dry-run] --yes
 stratarc agent edit NAME [--project P] [--definition] [--dry-run]
 stratarc agent explain NAME [--project P] [--account X] [--runtime R] [--key KEY]
 ```
 
-Per-agent settings inside a project or the source root. `edit` opens the agent's settings file, or with `--definition` its `.md` definition, in `$VISUAL` or `$EDITOR` and saves it only when the result validates. `explain` prints where each of the agent's values comes from, the same chain `config explain` prints. An unknown agent exits 2 (`msg-1107`).
+Per-agent settings inside a project or the source root. `add` creates the agent's definition in the source root; `--parent` names an existing agent whose tools and description are the defaults, `--tools` and `--description` set them, and an existing name exits 4 (`msg-1155`). `remove` backs up the agent's files and deletes them, and needs `--yes`. `edit` opens the agent's settings file, or with `--definition` its `.md` definition, in `$VISUAL` or `$EDITOR` and saves it only when the result validates. `explain` prints where each of the agent's values comes from, the same chain `config explain` prints. An unknown agent exits 2 (`msg-1107`).
 
 ## account
 
@@ -340,11 +352,11 @@ Per-agent settings inside a project or the source root. `edit` opens the agent's
 stratarc account list
 stratarc account show NAME
 stratarc account add NAME [--set KEY=VALUE]... [--dry-run]
-stratarc account edit NAME [--dry-run]
+stratarc account edit NAME [--set KEY=VALUE]... [--unset KEY]... [--dry-run]
 stratarc account remove NAME [--dry-run] --yes
 ```
 
-Named accounts and the settings tied to them, kept as files under `accounts/`. `add` creates the file from the `--set` pairs (strings, integers, booleans or lists of strings). `remove` backs the file up and needs `--yes`. An unknown account exits 2 (`msg-1108`), an existing one exits 4 (`msg-1148`) and a malformed pair exits 2 (`msg-1144`).
+Named accounts and the settings tied to them, kept as files under `accounts/`. `add` creates the file from the `--set` pairs (strings, integers, booleans or lists of strings). `edit` with no flags opens the file in `$VISUAL` or `$EDITOR`; with `--set` or `--unset` it changes those keys without an editor and keeps the comments of a TOML file. A key both set and unset exits 2 (`msg-1144`), an unset key that is not in the file exits 2 (`msg-1105`), and a JSON account file does not take the flags and exits 2 (`msg-1139`). `remove` backs the file up and needs `--yes`. An unknown account exits 2 (`msg-1108`), an existing one exits 4 (`msg-1148`) and a malformed pair exits 2 (`msg-1144`).
 
 The five resources above take the global `--root` and `--json`, accept the options shown after their verbs, and share the rules of every write: the new content is validated before it is saved, the old version is copied into the home backups first, and a file that declares a newer schema is never rewritten. Every write verb takes `--dry-run`, which reports the change and writes nothing. An editor that exits non-zero exits 1 (`msg-1152`).
 
@@ -354,4 +366,4 @@ The five resources above take the global `--root` and `--json`, accept the optio
 stratarc ui
 ```
 
-Opens the full-screen terminal interface on the source root: a tree of the projects, runtimes, agents and accounts, a detail pane, and keys to edit (`e`), explain (`x`), read the log (`l`), preview a sync (`s`) and verify (`v`). It writes only through the same paths as the commands above and uses no network. The global `--root` sets the source root. The interface needs Textual, installed with `pip install 'stratarc[ui]'`; without it the command prints `msg-1153` and exits 5. `starc` is a second name for the same command line.
+Opens the full-screen terminal interface on the source root: a tree of the projects, runtimes, agents and accounts, a detail pane, and keys to edit (`e`), explain (`x`), read the log (`l`), preview a sync (`s`) and verify (`v`). It writes only through the same paths as the commands above and uses no network. The global `--root` sets the source root. The interface needs Textual, installed with `pip install 'stratarc[ui]'`; without it the command prints `msg-1153` and exits 5. A source root that does not exist exits 2 (`msg-1001`), and input or output that is not a terminal exits 5 (`msg-1160`); both are checked before the screen opens. The checks run in that order, so a missing root is reported before a missing extra. The statuses are in [ui](ui.md).

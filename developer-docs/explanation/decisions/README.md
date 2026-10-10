@@ -50,7 +50,11 @@ Command line and interfaces:
 - [local API safeguards](2026-10-09-local-api-safeguards.md)
 - [terminal UI library is open](2026-10-09-terminal-ui-library-is-open.md), superseded by the Textual record below
 - [Textual is an optional extra for the terminal interface](2026-10-09-textual-is-an-optional-extra-for-the-terminal-interface.md)
-- [starc is the short command alias](2026-10-09-starc-is-the-short-command-alias.md)
+- [starc is the short command alias](2026-10-09-starc-is-the-short-command-alias.md), superseded by the drop record below
+- [drop the starc alias](2026-10-09-drop-the-starc-alias.md), supersedes the starc alias record: the command is `stratarc` only
+- [resource verbs fill the grammar gaps](2026-10-09-resource-verbs-fill-the-grammar-gaps.md)
+- [explain follows the dispatch relay and flags are a layer](2026-10-09-explain-follows-the-dispatch-relay-and-flags-are-a-layer.md)
+- [the interface validates edits and keeps slow work off its thread](2026-10-09-the-interface-validates-edits-and-keeps-slow-work-off-its-thread.md)
 - [CLI design is delivered in ordered slices](2026-10-09-cli-design-is-delivered-in-ordered-slices.md)
 - [first run is a choice, not a scan](2026-10-09-first-run-is-a-choice-not-a-scan.md)
 
@@ -59,3 +63,4 @@ Docs and tests:
 - [static docs site built from the repo](2026-10-09-static-docs-site-built-from-the-repo.md)
 - [example output is captured, not written](2026-10-09-example-output-is-captured-not-written.md)
 - [pytest is the only test runner](2026-10-09-pytest-is-the-only-test-runner.md)
+- [new CLI tests carry mutation proofs](2026-10-09-new-cli-tests-carry-mutation-proofs.md)
