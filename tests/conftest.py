@@ -84,7 +84,8 @@ class ExternalTestItem(pytest.Item):
         return super().repr_failure(excinfo, style)
 
     def reportinfo(self):
-        return self.path, None, self.name
+        # pytest builds the report for a skipped or failed item from this line number and asserts it is not None.
+        return self.path, 0, self.name
 
 
 class ExternalTestFile(pytest.File):
