@@ -206,8 +206,8 @@ def test_config_explain_shows_the_chain(served):
 
 def test_projects_runtimes_adapters_providers(served):
     projects = {r["name"]: r for r in served.get("/v1/projects").body["data"]["rows"]}
-    assert set(projects) == {"nomode", "notes"}
-    assert projects["notes"]["agents"] == ["reviewer"] and projects["notes"]["has_settings"] is True
+    assert set(projects) == {"cycle", "nomode", "notes"}
+    assert projects["notes"]["agents"] == ["lead", "quiet", "reviewer", "worker"] and projects["notes"]["has_settings"] is True
     runtimes = {r["name"]: r for r in served.get("/v1/runtimes").body["data"]["rows"]}
     assert runtimes["codex"]["enabled"] is True and runtimes["codex"]["target"] == "~/.codex"
     assert runtimes["claude"]["enabled"] is False

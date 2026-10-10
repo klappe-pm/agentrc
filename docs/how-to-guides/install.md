@@ -32,6 +32,10 @@ Contributors install an editable copy with the test dependencies. See [first con
 pip install -e '.[test]'
 ```
 
+## a-shorter-command
+
+The command is `stratarc` only. To type less, add a shell alias such as `alias sa=stratarc` to your shell profile, choosing a name that is free on your machine.
+
 ## upgrade
 
 ```bash

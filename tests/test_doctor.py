@@ -122,6 +122,17 @@ def test_the_permissions_table_covers_every_command_and_only_provider_test_uses_
     assert "provider test" in text and "exit 3" in text
 
 
+def test_the_permissions_table_lists_exactly_these_commands_in_order():
+    assert [row["command"] for row in doctor.permissions_table()] == [
+        "init", "doctor", "doctor --clean --yes", "doctor --report", "sync", "sync --verify --rollback-on-drift", "check", "diff", "prune",
+        "reconcile", "validate", "projects", "gen-rules-digest", "components", "config get|list|explain", "log show|tail|explain|export",
+        "log enable|disable|prune", "verify run", "verify last|show", "provider list|show", "provider add|edit|remove", "provider test",
+        "api schema", "api serve", "adapter list|show|status", "adapter register|remove|deprecate", "source show|list", "source init",
+        "source use|move", "project list|show", "project add|edit|enable|disable", "project remove", "runtime list|show",
+        "runtime enable|disable|target", "agent list|show|explain", "agent edit", "account list|show", "account add|edit|remove", "ui",
+    ]
+
+
 def make_backup_versions(home: Path, count: int) -> list[Path]:
     directory = home / ".stratarc" / "backups" / "key"
     directory.mkdir(parents=True)
