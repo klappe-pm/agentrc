@@ -329,6 +329,41 @@ def test_flags_set_the_environment_for_the_command_only(tmp_path, monkeypatch):
     assert not [name for name in seen if name in os.environ]
 
 
+def test_flags_restore_the_values_the_environment_already_held(tmp_path, monkeypatch):
+    held = {"STRATARC_SOURCE": "/held/source", "STRATARC_HOME": "/held/home", "LLM_ROOT_PROJECTS_DIR": "/held/projects", "STRATARC_GITHUB_OWNER": "held"}
+    for name, value in held.items():
+        monkeypatch.setenv(name, value)
+    root = tmp_path / "source"
+    root.mkdir()
+    other = tmp_path / "other-home"
+    other.mkdir()
+    seen: dict[str, str | None] = {}
+
+    def capture(_argv=None) -> int:
+        seen["owner"] = os.environ.get("STRATARC_GITHUB_OWNER")
+        return 0
+
+    monkeypatch.setattr("stratarc.sync.main", capture)
+
+    assert main(["--root", str(root), "--home", str(other), "--projects-root", str(tmp_path), "--owner", "me", "diff"]) == 0
+
+    assert seen["owner"] == "me"
+    assert {name: os.environ.get(name) for name in held} == held
+
+
+def test_the_environment_source_beats_the_registered_source(stratarc_home, source_root, tmp_path, monkeypatch, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    registered = tmp_path / "registered-source"
+
+    assert main(["source", "init", str(registered), "--name", "main", "--use"]) == 0
+    capsys.readouterr()
+    assert main(["--json", "source", "show"]) == 0
+
+    assert json.loads(capsys.readouterr().out)["data"]["root"] == str(source_root.resolve())
+
+
 def test_importing_the_cli_reads_no_environment(monkeypatch):
     monkeypatch.setenv("STRATARC_HOME", "/nonexistent")
     code = "import stratarc.cli, stratarc.paths as p; print(p.home())"
@@ -498,6 +533,7 @@ def test_every_module_code_resolves_to_a_catalog_message():
         "invalid-edit", "no-editor", "needs-yes", "source-not-found", "invalid-name", "invalid-value", "invalid-path",
         "invalid-config", "project-exists", "account-exists", "source-exists", "path-exists", "not-reconciled",
         "editor-failed", "ui-extra-missing", "conflict",
+        "agent-exists", "relay-cycle", "relay-depth", "relay-invalid", "flag-invalid",
     }
     assert wanted == set(messages.CODE_MESSAGES)
 
@@ -509,10 +545,11 @@ def test_every_module_code_is_raised_by_a_module_and_every_message_has_two_sente
     for message in messages.CATALOG.values():
         assert message.problem.endswith((".", "}")) and message.recovery.endswith("."), message.id
     ids = sorted(messages.CATALOG)
-    assert ids == sorted(set(ids)) and ids[-1] == "msg-1154"
+    assert ids == sorted(set(ids)) and ids[-1] == "msg-1160"
+
 
 def test_a_conflict_code_keeps_its_exit_status():
-    for code in ("adapter-exists", "provider-exists", "project-exists", "account-exists", "source-exists", "path-exists", "conflict"):
+    for code in ("adapter-exists", "provider-exists", "project-exists", "account-exists", "agent-exists", "source-exists", "path-exists", "conflict"):
         assert messages.from_code(code, "x").exit == messages.CONFLICT, code
     assert messages.from_code("not-reconciled", "x").exit == messages.UNAVAILABLE
     assert messages.from_code("ui-extra-missing", "x").exit == messages.UNAVAILABLE
@@ -1003,12 +1040,11 @@ def test_source_use_is_read_by_the_next_command_with_no_flag_variable_or_config(
     assert paths.source_root() == target.resolve()
 
 
-def test_the_starc_script_name_points_at_the_same_entry_point():
+def test_the_package_installs_exactly_one_console_script_named_stratarc():
     import tomllib
 
     scripts = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
-    assert scripts["starc"] == "stratarc.cli:main"
-    assert scripts["stratarc"] == scripts["starc"]
+    assert scripts == {"stratarc": "stratarc.cli:main"}
 
 
 # ----- the ui command -----
@@ -1016,6 +1052,7 @@ def test_the_starc_script_name_points_at_the_same_entry_point():
 
 def test_ui_forwards_its_arguments_and_the_global_root(ready, monkeypatch):
     monkeypatch.setattr("stratarc.ui.textual_available", lambda: True)
+    monkeypatch.setattr("stratarc.ui.interactive", lambda: True)
     seen: dict[str, str] = {}
     recorder = Recorder(0)
 
@@ -1030,6 +1067,7 @@ def test_ui_forwards_its_arguments_and_the_global_root(ready, monkeypatch):
 
 def test_ui_passes_a_nonzero_status_through(ready, monkeypatch):
     monkeypatch.setattr("stratarc.ui.textual_available", lambda: True)
+    monkeypatch.setattr("stratarc.ui.interactive", lambda: True)
     for status in (5, 130):
         patch_main(monkeypatch, "ui", status)
         assert main(["ui"]) == status
@@ -1060,3 +1098,63 @@ def test_ui_help_works_without_the_extra(monkeypatch, capsys):
 
     assert main(["ui", "--help"]) == 0
     assert "stratarc ui" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("extra", [False, True], ids=["extra-absent", "extra-present"])
+def test_ui_on_a_missing_source_root_is_msg_1001_and_exit_2_without_opening_the_screen(stratarc_home, tmp_path, monkeypatch, capsys, extra):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: extra)
+    monkeypatch.setattr("stratarc.ui.interactive", lambda: False)
+    recorder = patch_main(monkeypatch, "ui")
+    missing = tmp_path / "no-such-root"
+
+    assert main(["ui", "--root", str(missing)]) == 2
+
+    err = capsys.readouterr().err
+    assert err.startswith("error msg-1001") and "does not exist" in err
+    assert recorder.calls == []
+
+
+def test_ui_on_a_missing_source_root_is_one_json_envelope(stratarc_home, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: True)
+    monkeypatch.setattr("stratarc.ui.interactive", lambda: False)
+
+    assert main(["--json", "ui", "--root", str(tmp_path / "no-such-root")]) == 2
+
+    body = json.loads(capsys.readouterr().out)
+    assert body["ok"] is False and body["error"]["code"] == "msg-1001"
+
+
+def test_ui_without_the_extra_on_a_good_root_is_still_msg_1153_and_exit_5(ready, monkeypatch, capsys):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: False)
+    monkeypatch.setattr("stratarc.ui.interactive", lambda: False)
+
+    assert main(["ui", "--root", str(ready)]) == 5
+    assert capsys.readouterr().err.startswith("error msg-1153")
+
+
+def test_ui_without_a_terminal_is_msg_1160_and_exit_5_instead_of_hanging(ready, monkeypatch, capsys):
+    monkeypatch.setattr("stratarc.ui.textual_available", lambda: True)
+    monkeypatch.setattr("stratarc.ui.interactive", lambda: False)
+    recorder = patch_main(monkeypatch, "ui")
+
+    assert main(["ui", "--root", str(ready)]) == 5
+
+    err = capsys.readouterr().err
+    assert err.startswith("error msg-1160") and "terminal" in err
+    assert recorder.calls == []
+
+
+def test_ui_probe_reads_both_standard_streams(monkeypatch):
+    from stratarc import ui
+
+    class Stream:
+        def __init__(self, tty):
+            self.tty = tty
+
+        def isatty(self):
+            return self.tty
+
+    for stdin, stdout, expected in ((True, True, True), (False, True, False), (True, False, False), (False, False, False)):
+        monkeypatch.setattr("sys.stdin", Stream(stdin))
+        monkeypatch.setattr("sys.stdout", Stream(stdout))
+        assert ui.interactive() is expected

@@ -1,0 +1,30 @@
+# The terminal interface tests with Textual installed, run under a pseudo-terminal
+# so Textual sees a tty. The main workflow runs the same files without the extra,
+# where the app tests skip.
+name: ui
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    name: ui
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: install the interface and test dependencies
+        run: python -m pip install -e '.[ui,test]'
+      - name: pytest in a pseudo-terminal
+        run: script -qec "python -m pytest -q tests/test_ui_model.py tests/test_ui_app.py" /dev/null

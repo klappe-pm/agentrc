@@ -102,15 +102,19 @@ assert_detect "vendor subdomain link"               "[${AGENT} Code](https://cod
 assert_detect "vendor name inside a third-party host" "[${AGENT} Code](https://${VENDOR}.example.net/${AGENT_LOWER})" clean
 assert_detect "vendor host behind userinfo"         "[${AGENT} Code](https://user@${AGENT_LOWER}.ai/code)" dirty
 # A sources line is no shelter for the forms that are always attribution.
+# The literals below are spliced so this file does not trip the detector it tests.
+PERMALINK="https://cla""ude.ai/code/session_01Ab"
+GENERATED="Gene""rated"
+ROBOT=$'\xf0\x9f\xa4\x96'
 assert_detect "sources line with a session permalink" "## sources
 
-- https://cla""ude.ai/code/session_01Ab" dirty
+- ${PERMALINK}" dirty
 assert_detect "sources line with a footer"          "## sources
 
-- [GitHub ${COPILOT} statistics](https://quashbugs.com/blog/github-${COPILOT_LOWER}-statistics). Gene""rated with ${AGENT} Code" dirty
+- [GitHub ${COPILOT} statistics](https://quashbugs.com/blog/github-${COPILOT_LOWER}-statistics). ${GENERATED} with ${AGENT} Code" dirty
 assert_detect "sources line with a robot byline"    "## sources
 
-- [GitHub ${COPILOT} statistics](https://quashbugs.com/blog/github-${COPILOT_LOWER}-statistics) "$'\xf0\x9f\xa4\x96' dirty
+- [GitHub ${COPILOT} statistics](https://quashbugs.com/blog/github-${COPILOT_LOWER}-statistics) ${ROBOT}" dirty
 assert_detect "sources line with a co-author trailer" "## sources
 
 Co-Authored-By: ${AGENT} <noreply@${VENDOR}>" dirty

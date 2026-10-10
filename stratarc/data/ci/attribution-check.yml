@@ -31,7 +31,7 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER/commits" --paginate --jq '.[] | {sha: .sha, message: .commit.message}' > "$RUNNER_TEMP/commits.jsonl"
-            python3 scripts/ci/attribution-check.py --commits "$RUNNER_TEMP/commits.jsonl"
+            python3 .github/attribution-check/attribution-check.py --commits "$RUNNER_TEMP/commits.jsonl"
           else
-            python3 scripts/ci/attribution-check.py
+            python3 .github/attribution-check/attribution-check.py
           fi

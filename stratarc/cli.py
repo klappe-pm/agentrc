@@ -461,15 +461,19 @@ def cmd_api(args: argparse.Namespace, rest: list[str]) -> int:
 
 
 def cmd_ui(args: argparse.Namespace, rest: list[str]) -> int:
-    """Forward `ui` to the terminal interface; without the extra, show the catalog message and exit 5.
+    """Forward `ui` to the terminal interface.
 
-    The interface owns the terminal, so nothing it prints is captured. The global `--root` reaches it through the environment the flags set.
+    Before the screen opens, a missing source root exits 2 (`msg-1001`), a missing extra exits 5 (`msg-1153`) and input or output that is not a terminal exits 5 (`msg-1160`); opening Textual without a terminal would otherwise wait forever. The interface owns the terminal, so nothing it prints is captured. The global `--root` reaches it through the environment the flags set.
     """
     from stratarc import ui
 
     asking_for_help = any(flag in rest for flag in ("-h", "--help"))
-    if not asking_for_help and not ui.textual_available():
-        raise CliError("msg-1153", param="ui")
+    if not asking_for_help:
+        _require_source_root()
+        if not ui.textual_available():
+            raise CliError("msg-1153", param="ui")
+        if not ui.interactive():
+            raise CliError("msg-1160", param="ui")
     return _call(ui.main, list(rest))
 
 

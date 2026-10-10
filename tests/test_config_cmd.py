@@ -149,6 +149,129 @@ def test_notes_cli_example_key_with_project_overlay(capsys):
     assert "  base     permissions.json:6" in out
 
 
+def test_explain_shows_the_relay_after_the_agent_layer(capsys):
+    code, out, _ = run(capsys, "explain", "permissions.timeout", "--project", "notes", "--agent", "worker")
+    assert code == 0
+    lines = out.splitlines()
+    assert lines[0] == "permissions.timeout   (project: notes, agent: worker)"
+    agent = next(i for i, line in enumerate(lines) if line.startswith("  agent"))
+    assert "projects-root/notes/agents/lead.json:4" in lines[agent] and lines[agent].endswith("120   (via lead)")
+    assert lines[agent + 1 :] == [
+        "  relay    worker <- lead   inherit: permissions.*   (projects-root/notes/agents/worker.json:2)",
+        "  relay    permissions.timeout inherited from lead",
+        "  relay    account: work (from lead; worker sets none)",
+        "result: 120   decided by: agent (set)",
+    ]
+
+
+def test_explain_says_why_a_key_was_not_inherited(capsys):
+    _, out, _ = run(capsys, "explain", "settings.owner", "--project", "notes", "--agent", "worker")
+    assert "  relay    lead sets settings.owner but it is not inherited: no relay.inherit pattern matches (inherit: permissions.*)" in out.splitlines()
+    assert "result: \"worker-owner\"   decided by: agent (set)" in out
+    _, out, _ = run(capsys, "explain", "permissions.timeout", "--project", "notes", "--agent", "quiet")
+    assert "  relay    lead sets permissions.timeout but it is not inherited: relay.inherit is empty, so nothing is inherited" in out.splitlines()
+    assert "result: 60   decided by: project (set)" in out
+
+
+def test_explain_relay_json(capsys):
+    code, out, _ = run(capsys, "explain", "permissions.timeout", "--project", "notes", "--agent", "worker", "--json")
+    data = json.loads(out)["data"]
+    assert code == 0
+    assert data["relay"]["chain"] == [
+        {"agent": "worker", "parent": "lead", "inherit": ["permissions.*"], "file": "projects-root/notes/agents/worker.json", "line": 2}
+    ]
+    assert data["relay"]["account"] == {"name": "work", "from": "parent", "agent": "lead"}
+    key = data["keys"][0]
+    assert key["relay"] == {"supplied_by": "lead", "not_inherited": []}
+    assert key["steps"][-1]["via"] == "lead"
+    _, out, _ = run(capsys, "explain", "settings.owner", "--project", "notes", "--agent", "worker", "--json")
+    assert json.loads(out)["data"]["keys"][0]["relay"]["not_inherited"] == [
+        {"parent": "lead", "reason": "no relay.inherit pattern matches (inherit: permissions.*)"}
+    ]
+
+
+def test_explain_without_a_relay_prints_no_relay_lines(capsys):
+    _, out, _ = run(capsys, "explain", "permissions.timeout", "--project", "notes", "--agent", "reviewer", "--json")
+    assert "relay" not in json.loads(out)["data"]
+    _, out, _ = run(capsys, "explain", "permissions.timeout", "--project", "notes", "--agent", "reviewer")
+    assert "relay" not in out
+
+
+def test_relay_cycle_is_exit_2_with_the_chain(capsys):
+    code, out, err = run(capsys, "get", "permissions.timeout", "--project", "cycle", "--agent", "ping")
+    assert (code, out) == (2, "")
+    assert err.startswith("error relay-cycle") and "ping -> pong -> ping" in err
+
+
+def test_tree_shows_relay_edges(capsys):
+    code, out, _ = run(capsys, "explain", "--tree", "--project", "notes")
+    assert code == 0
+    assert "  relay   quiet <- lead   inherit: (none)   projects-root/notes/agents/quiet.json:2" in out.splitlines()
+    assert "  relay   worker <- lead   inherit: permissions.*   projects-root/notes/agents/worker.json:2" in out.splitlines()
+    _, out, _ = run(capsys, "explain", "--tree", "--project", "notes", "--json")
+    edges = json.loads(out)["data"]["relay"]
+    assert [(e["agent"], e["parent"], e["inherit"]) for e in edges] == [("quiet", "lead", []), ("worker", "lead", ["permissions.*"])]
+
+
+# ---- --set, --set-json, --set-mode ----------------------------------------------------------
+
+
+def test_set_is_a_literal_string_flag_layer(capsys):
+    assert run(capsys, "get", "permissions.timeout", "--set", "permissions.timeout=5") == (0, "5\n", "")
+    code, out, _ = run(capsys, "get", "permissions.timeout", "--project", "notes", "--set-json", "permissions.timeout=5", "--json")
+    data = json.loads(out)["data"]
+    assert code == 0 and data["value"] == 5
+    last = data["steps"][-1]
+    assert (last["layer"], last["file"], last["line"]) == ("flags", "--set", 0)
+    assert last["overrode"] == [{"layer": "base", "value": 30}, {"layer": "project", "value": 60}]
+
+
+def test_set_works_before_the_action_and_repeats(capsys):
+    code, out, _ = run(capsys, "--set", "settings.a=1", "list", "--set", "settings.b=2")
+    assert code == 0
+    assert 'settings.a = "1"' in out.splitlines() and 'settings.b = "2"' in out.splitlines()
+
+
+def test_explain_prints_the_flags_layer_last(capsys):
+    _, out, _ = run(capsys, "explain", "permissions.timeout", "--project", "notes", "--set", "permissions.timeout=5")
+    lines = out.splitlines()
+    assert lines[-2].split() == ["flags", "--set", '"5"']
+    assert lines[-1] == 'result: "5"   decided by: flags (set)'
+
+
+def test_a_set_list_needs_set_mode(capsys):
+    code, out, err = run(capsys, "get", "permissions.network.allow", "--set-json", 'permissions.network.allow=["x.example"]')
+    assert (code, out) == (2, "")
+    assert err.startswith("error list-mode-missing") and "--set-mode" in err
+    argv = ["get", "permissions.network.allow", "--set-json", 'permissions.network.allow=["x.example"]']
+    assert run(capsys, *argv, "--set-mode", "permissions.network.allow=extend")[1] == '["api.example.com", "x.example"]\n'
+    assert run(capsys, *argv, "--set-mode", "permissions.network.allow=replace")[1] == '["x.example"]\n'
+
+
+@pytest.mark.parametrize(
+    ("argv", "code"),
+    [
+        (["--set", "nokey"], "flag-invalid"),
+        (["--set", "=1"], "flag-invalid"),
+        (["--set-json", "settings.a={oops"], "flag-invalid"),
+        (["--set", "settings.a=1", "--set-mode", "settings.a=extend"], "mode-invalid"),
+        (["--set-json", "settings.a=[1]", "--set-mode", "settings.a=append"], "mode-invalid"),
+        (["--set-mode", "settings.zzz=extend"], "flag-invalid"),
+        (["--set-mode", "nomode"], "flag-invalid"),
+    ],
+)
+def test_bad_flags_are_invalid_input(capsys, argv, code):
+    exit_code, out, _ = run(capsys, "list", *argv, "--json")
+    body = json.loads(out)
+    assert exit_code == 2 and body["ok"] is False and body["error"]["code"] == code and body["error"]["hint"]
+
+
+def test_flags_never_write(capsys):
+    before = sorted((p, p.read_bytes()) for p in FIXTURE.rglob("*") if p.is_file())
+    run(capsys, "list", "--set", "settings.a=1")
+    assert before == sorted((p, p.read_bytes()) for p in FIXTURE.rglob("*") if p.is_file())
+
+
 def test_notes_cli_example_lists_resolve_for_its_project(capsys):
     code, out, err = run(capsys, "list", "--project", "notes-cli", root=EXAMPLE)
     assert code == 0, out + err

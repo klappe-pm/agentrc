@@ -20,6 +20,11 @@ def textual_available() -> bool:
     return importlib.util.find_spec("textual") is not None
 
 
+def interactive() -> bool:
+    """Whether both standard input and output are a terminal, which the full-screen interface needs."""
+    return bool(sys.stdin and sys.stdin.isatty() and sys.stdout and sys.stdout.isatty())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="stratarc ui", description="Open the terminal interface.")
     parser.add_argument("--root", metavar="PATH", help="the source root")

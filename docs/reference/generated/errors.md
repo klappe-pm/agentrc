@@ -70,6 +70,12 @@ Every message the command line can print, generated from `stratarc/messages.py`.
 | [`msg-1152`](#msg-1152) | 1 failure | The editor did not finish: {detail} |
 | [`msg-1153`](#msg-1153) | 5 unavailable | The terminal interface needs Textual, which is not installed. |
 | [`msg-1154`](#msg-1154) | 4 conflict | The change conflicts with what already exists: {detail} |
+| [`msg-1155`](#msg-1155) | 4 conflict | The agent already exists: {detail} |
+| [`msg-1156`](#msg-1156) | 2 invalid-input | The agents relay to each other in a loop: {detail} |
+| [`msg-1157`](#msg-1157) | 2 invalid-input | The relay chain of the agent is too long: {detail} |
+| [`msg-1158`](#msg-1158) | 2 invalid-input | An agent's "parent" or "relay" is not valid: {detail} |
+| [`msg-1159`](#msg-1159) | 2 invalid-input | A --set, --set-json or --set-mode flag is not valid: {detail} |
+| [`msg-1160`](#msg-1160) | 5 unavailable | The terminal interface needs a terminal, and its input or output is redirected. |
 
 ## messages
 
@@ -676,3 +682,61 @@ Problem: The change conflicts with what already exists: {detail}
 Recovery: Resolve the conflict, or choose another name or path, then run the command again.
 
 Raised for the module code `conflict`.
+
+### msg-1155
+
+Ends the command with status 4 (conflict).
+
+Problem: The agent already exists: {detail}
+
+Recovery: Change it with `stratarc agent edit`, or pick another name.
+
+Raised for the module code `agent-exists`.
+
+### msg-1156
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The agents relay to each other in a loop: {detail}
+
+Recovery: Remove one "parent" so the chain ends at an agent with no parent.
+
+Raised for the module code `relay-cycle`.
+
+### msg-1157
+
+Ends the command with status 2 (invalid-input).
+
+Problem: The relay chain of the agent is too long: {detail}
+
+Recovery: Shorten the chain, or give the child the settings directly.
+
+Raised for the module code `relay-depth`.
+
+### msg-1158
+
+Ends the command with status 2 (invalid-input).
+
+Problem: An agent's "parent" or "relay" is not valid: {detail}
+
+Recovery: Name an existing agent in "parent" and give "relay" an "inherit" list of key patterns, or remove the key.
+
+Raised for the module code `relay-invalid`.
+
+### msg-1159
+
+Ends the command with status 2 (invalid-input).
+
+Problem: A --set, --set-json or --set-mode flag is not valid: {detail}
+
+Recovery: Write KEY=VALUE, quote JSON for your shell, and pass --set-mode only with the --set or --set-json that sets the key.
+
+Raised for the module code `flag-invalid`.
+
+### msg-1160
+
+Ends the command with status 5 (unavailable).
+
+Problem: The terminal interface needs a terminal, and its input or output is redirected.
+
+Recovery: Run `stratarc ui` in an interactive terminal, or use the commands that print text, such as `stratarc config list`.

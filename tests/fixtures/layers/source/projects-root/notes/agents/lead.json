@@ -1,0 +1,10 @@
+{
+  "account": "work",
+  "permissions": {
+    "timeout": 120,
+    "defaultMode": "plan"
+  },
+  "settings": {
+    "owner": "lead-owner"
+  }
+}

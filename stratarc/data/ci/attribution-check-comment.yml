@@ -25,4 +25,4 @@ jobs:
         with:
           persist-credentials: false
       - name: scan the comment
-        run: python3 scripts/ci/attribution-check.py
+        run: python3 .github/attribution-check/attribution-check.py

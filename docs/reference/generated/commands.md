@@ -187,7 +187,7 @@ This command forwards its arguments to its own parser. Run `stratarc components 
 show the resolved settings and where each value came from.
 
 ```text
-stratarc config {get,list,explain} [--project P] [--agent A] [--account X] [--runtime R]
+stratarc config {get,list,explain} [--project P] [--agent A] [--account X] [--runtime R] [--set KEY=VALUE] [--set-json KEY=JSON] [--set-mode KEY=MODE]
 ```
 
 | option | meaning |
@@ -196,6 +196,9 @@ stratarc config {get,list,explain} [--project P] [--agent A] [--account X] [--ru
 | `--agent` `A` |  |
 | `--account` `X` |  |
 | `--runtime` `R` |  |
+| `--set` `KEY=VALUE` | Set a key to a literal string in the flags layer (repeatable). |
+| `--set-json` `KEY=JSON` | Set a key to a JSON value in the flags layer (repeatable). |
+| `--set-mode` `KEY=MODE` | Replace or extend, for a --set-json list that redefines a list. Repeatable. |
 
 ### config-get
 

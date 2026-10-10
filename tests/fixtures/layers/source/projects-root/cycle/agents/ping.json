@@ -1,0 +1,6 @@
+{
+  "parent": "pong",
+  "relay": {
+    "inherit": ["permissions.*"]
+  }
+}

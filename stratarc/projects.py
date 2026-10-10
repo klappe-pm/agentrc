@@ -913,14 +913,12 @@ def _origin_is_owned(dst: pathlib.Path) -> bool:
 
 def _rendered_check(target: str) -> bytes | None:
     """The bytes a project carries at *target*, or None when the source is
-    missing. The workflow names the script at its project path."""
+    missing. The packaged workflows already name the script at its project
+    path (CHECK_SCRIPT_TARGET), so the bytes are rendered as packaged."""
     source = _packaged(CI_DATA) / RENDERED_CHECK_FILES[target]
     if not source.is_file():
         return None
-    data = source.read_bytes()
-    if target in CHECK_WORKFLOW_TARGETS:
-        data = data.replace(CHECK_SCRIPT_SOURCE.encode(), CHECK_SCRIPT_TARGET.encode())
-    return data
+    return source.read_bytes()
 
 
 def _render_attribution_check(dst: pathlib.Path, dry: bool, acts: list[str]) -> None:

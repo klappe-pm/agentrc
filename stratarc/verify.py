@@ -131,12 +131,28 @@ def _relative(path: str, target: Path) -> str | None:
         return None
 
 
-def _drifted_paths(actions: list[str], target: Path) -> tuple[set[str], list[str]]:
+def _relative_names(action: str, owned: set[str] | None) -> set[str]:
+    """Target-relative files a line names without an absolute path.
+
+    With the render's owned set, a token counts when it is an owned path or the tail of one. Without it, only the right side of `a -> b` counts, and only when it contains a slash (a bare name could sit under any subdirectory).
+    """
+    tokens = [t.strip("'\"`,;:()") for t in action.split()]
+    if owned is not None:
+        return {o for o in owned for t in tokens if t and (o == t or o.endswith("/" + t))}
+    if "->" in tokens:
+        right = tokens[tokens.index("->") + 1 :]
+        if right and "/" in right[0] and not right[0].startswith("/"):
+            return {right[0]}
+    return set()
+
+
+def _drifted_paths(actions: list[str], target: Path, owned: set[str] | None = None) -> tuple[set[str], list[str]]:
     """The target-relative files the dry-run actions name, and the actions that name none."""
     named: set[str] = set()
     unplaced: list[str] = []
     for action in actions:
         found = {rel for raw in _PATH.findall(action) if (rel := _relative(raw.rstrip(".:"), target)) is not None}
+        found |= _relative_names(action, owned)
         if found:
             named |= found
         else:
@@ -167,8 +183,8 @@ def _compare_runtime(name: str, mod: str, target: Path, stage: Path, root: Path,
         notes.append(f"{name}: adapter missing ({error.name}); not verified")
         return [_entry("runtime", name, "(adapter)", SKIPPED, detail=f"adapter {mod} is missing")]
     actions = _sync_call(adapter, name, stage, target, root, dry_run=True)
-    drifted, unplaced = _drifted_paths(actions, target)
     scratch, owned = _owned_files(adapter, name, stage, root, notes)
+    drifted, unplaced = _drifted_paths(actions, target, owned if scratch is not None else None)
     entries: list[dict] = []
     try:
         for rel in sorted(owned | drifted):

@@ -8,8 +8,8 @@ Usage:
   source move NEW_PATH [--name N] --yes   move a registered source root and update sources.toml
   project add|list|show|edit|remove|enable|disable
   runtime list|show|enable|disable|target
-  agent list|show|edit|explain
-  account list|show|add|edit|remove
+  agent list|show|add|edit|remove|explain
+  account list|show|add|edit|remove      `account edit NAME --set KEY=VALUE --unset KEY` changes values without an editor
 
 Every verb accepts `--root PATH` (the source root) and `--json`. With `--json` the output is one envelope `{ok, data, error}` where `error` carries `code`, `message`, `param` and `hint`. Every write verb accepts `--dry-run`, which validates and reports the change and writes nothing. A verb that deletes needs `--yes`.
 
@@ -23,7 +23,7 @@ Rules every write follows:
 Active source root. `--root`, then `STRATARC_SOURCE`, then the nearest `stratarc.toml` above the current directory, then the active entry of the home's `sources.toml`, then the current directory.
 
 The error codes below are stable strings; the coordinating command line maps them to catalog ids:
-`unknown-project`, `unknown-runtime`, `unknown-agent`, `unknown-account`, `project-exists`, `account-exists`, `source-exists`, `path-exists`, `invalid-edit`, `invalid-name`, `invalid-value`, `invalid-path`, `invalid-config`, `no-editor`, `editor-failed`, `needs-yes`, `source-not-found`, `source-root-missing`, `not-reconciled`, plus the layer codes (`parse-error`, `list-mode-missing`, `mode-invalid`, `type-mismatch`) and the home codes (`newer-schema`, `home-unwritable`).
+`unknown-project`, `unknown-runtime`, `unknown-agent`, `unknown-account`, `unknown-key`, `project-exists`, `account-exists`, `agent-exists`, `source-exists`, `path-exists`, `invalid-edit`, `invalid-name`, `invalid-value`, `invalid-path`, `invalid-config`, `no-editor`, `editor-failed`, `needs-yes`, `source-not-found`, `source-root-missing`, `not-reconciled`, plus the layer codes (`parse-error`, `list-mode-missing`, `mode-invalid`, `type-mismatch`) and the home codes (`newer-schema`, `home-unwritable`).
 
 Exit codes: 0 ok; 2 invalid input, an unknown name or a missing flag; 3 the home cannot be written; 4 a name or path that already exists; 5 a newer schema, or a control plane that has not been reconciled; 1 an editor that failed.
 """
@@ -74,6 +74,7 @@ _EXITS = {
     "path-exists": CONFLICT,
     "project-exists": CONFLICT,
     "account-exists": CONFLICT,
+    "agent-exists": CONFLICT,
     "source-exists": CONFLICT,
     "not-reconciled": UNAVAILABLE,
     "editor-failed": FAILURE,
@@ -215,7 +216,7 @@ def _save(path: Path, text: str, *, root: Path, dry: bool, role: str | None = No
     changed = (not existed) or _read(path) != text
     result: dict[str, Any] = {"file": shown, "changed": changed, "created": not existed, "backup": None, "dry_run": dry}
     if changed and not dry:
-        backup = layout.safe_write(path, text)
+        backup = layout.safe_write(path, text, private=False)
         result["backup"] = str(backup) if backup else None
     return result
 
@@ -260,6 +261,9 @@ def _header_pattern(table: tuple[str, ...]) -> re.Pattern[str]:
 
 
 def _section(lines: list[str], table: tuple[str, ...]) -> tuple[int, int] | None:
+    """The line range of one table: `(header index, end)`. The top level (an empty `table`) starts at -1 and ends at the first header."""
+    if not table:
+        return -1, next((i for i, line in enumerate(lines) if line.lstrip().startswith("[")), len(lines))
     pattern = _header_pattern(table)
     for index, line in enumerate(lines):
         if pattern.match(line.rstrip("\r\n")):
@@ -328,10 +332,36 @@ def set_toml_values(text: str, table: tuple[str, ...], values: Mapping[str, str]
                 stripped = lines[index].strip()
                 if stripped and not stripped.startswith("#"):
                     last = index
+            if last < 0:
+                # A top level with no keys yet: the new key goes after any leading comments, ahead of the first table.
+                position = end
+                while position > 0 and not lines[position - 1].strip():
+                    position -= 1
+                if position > 0 and not lines[position - 1].endswith("\n"):
+                    lines[position - 1] += newline
+                lines.insert(position, f"{key} = {literal}{newline}")
+                if position + 1 < len(lines) and lines[position + 1].strip():
+                    lines.insert(position + 1, newline)
+                continue
             if not lines[last].endswith("\n"):
                 lines[last] += newline
             lines.insert(last + 1, f"{key} = {literal}{newline}")
     return "".join(lines)
+
+
+def remove_toml_key(text: str, table: tuple[str, ...], key: str) -> str | None:
+    """Delete one key line from a `[a.b]` table (or the top level), leaving every other byte as it was; None when the key is not there."""
+    lines = text.splitlines(keepends=True)
+    found = _section(lines, table)
+    if found is None:
+        return None
+    start, end = found
+    key_pattern = re.compile(rf"^\s*(?:{re.escape(key)}|\"{re.escape(key)}\"|'{re.escape(key)}')\s*=")
+    for index in range(start + 1, end):
+        if key_pattern.match(lines[index]):
+            del lines[index]
+            return "".join(lines)
+    return None
 
 
 def _literal(value: bool | str) -> str:
@@ -574,10 +604,42 @@ def _files_under(directory: Path) -> list[Path]:
     return sorted(p for p in directory.rglob("*") if p.is_file())
 
 
-def _toggle_cells(root: Path, name: str, on: bool, dry: bool, strict: bool) -> dict[str, Any]:
-    """Opt the project's `project:` rows in or out of its control-plane column, through `set_cell`."""
+def _set_manifest_status(text: str, name: str, value: str) -> tuple[str, bool] | None:
+    """Set the `status` cell of `name` in the manifest table (the one headed `project`), keeping every other byte.
+
+    Returns `(new text, changed)`, or None when no manifest table has a status column and a row for the project. `ControlPlane` reads the manifest but has no writer for it, so the cell is edited here and then read back through `ControlPlane.load`.
+    """
+    lines = text.splitlines(keepends=True)
+    position: int | None = None
+    for index, raw in enumerate(lines):
+        if not raw.lstrip().startswith("|"):
+            position = None
+            continue
+        body = raw.rstrip("\r\n")
+        cells = [c.strip() for c in body.strip().strip("|").split("|")]
+        if cells and cells[0].lower() == "project":
+            lowered = [c.lower() for c in cells]
+            position = lowered.index("status") if "status" in lowered else None
+            continue
+        if position is None or cells[0] != name or position >= len(cells):
+            continue
+        parts = body.split("|")
+        cell = parts[position + 1]
+        if cell.strip() == value:
+            return text, False
+        parts[position + 1] = cell.replace(cell.strip(), value, 1) if cell.strip() else f" {value} "
+        lines[index] = "|".join(parts) + raw[len(body) :]
+        return "".join(lines), True
+    return None
+
+
+def _toggle_cells(root: Path, name: str, on: bool, dry: bool, strict: bool, status: str | None = None) -> dict[str, Any]:
+    """Opt the project's `project:` rows in or out of its control-plane column, through `set_cell`.
+
+    With `status`, the project's manifest status cell is set to it in the same write; `result["status"]` is `{from, to, changed}`, or None when the manifest has no status cell to set (the reconciler adds it).
+    """
     path = root / CONTROL_PLANE_NAME
-    result: dict[str, Any] = {"changed": [], "reconciled": True, "backup": None}
+    result: dict[str, Any] = {"changed": [], "reconciled": True, "backup": None, "status": None}
     plane = ControlPlane.load(path) if path.is_file() else None
     if plane is None or name not in plane.columns:
         if strict:
@@ -585,6 +647,7 @@ def _toggle_cells(root: Path, name: str, on: bool, dry: bool, strict: bool) -> d
         result["reconciled"] = False
         return result
     rows = [row for row in plane.rows if row.startswith("project:")]
+    status_changed = False
     with tempfile.TemporaryDirectory(prefix="stratarc-cp-") as tmp:
         probe = Path(tmp) / CONTROL_PLANE_NAME
         probe.write_bytes(path.read_bytes())
@@ -594,13 +657,21 @@ def _toggle_cells(root: Path, name: str, on: bool, dry: bool, strict: bool) -> d
                     result["changed"].append(row)
             except KeyError:
                 continue
+        if status is not None:
+            edited = _set_manifest_status(probe.read_bytes().decode("utf-8"), name, status)
+            if edited is not None:
+                previous = plane.status(name)
+                status_changed = edited[1]
+                result["status"] = {"from": previous, "to": status, "changed": status_changed}
+                if status_changed:
+                    probe.write_bytes(edited[0].encode("utf-8"))
         updated = probe.read_bytes()
-        if result["changed"]:
+        if result["changed"] or status_changed:
             check = ControlPlane.load(probe)
-            if any(check.enabled(name, row) != on for row in result["changed"]):
+            if any(check.enabled(name, row) != on for row in result["changed"]) or (status_changed and check.status(name) != status):
                 raise ResourceError("invalid-edit", "control-plane.md did not take the change.", hint="The file was left unchanged.")
-    if result["changed"] and not dry:
-        backup = layout.safe_write(path, updated)
+    if (result["changed"] or status_changed) and not dry:
+        backup = layout.safe_write(path, updated, private=False)
         result["backup"] = str(backup) if backup else None
     return result
 
@@ -704,12 +775,21 @@ def _project_toggle(ctx: Context, on: bool) -> tuple[dict, str]:
     root = ctx.root
     name = ctx.args.name
     _project_dir(root, name)
-    cells = _toggle_cells(root, name, on, ctx.dry, strict=True)
+    cells = _toggle_cells(root, name, on, ctx.dry, strict=True, status="active" if on else "inactive")
     word = "enable" if on else "disable"
-    data = {"name": name, "enabled": on, "control_plane": cells, "dry_run": ctx.dry}
-    if not cells["changed"]:
-        return data, f"project {word}: no control-plane cells needed to change for {name}"
-    return data, f"project {word}: {'would change' if ctx.dry else 'changed'} {len(cells['changed'])} control-plane cells for {name}" + ("; dry run, nothing written" if ctx.dry else "")
+    data = {"name": name, "enabled": on, "control_plane": cells, "reconcile_needed": cells["status"] is None, "dry_run": ctx.dry}
+    status = cells["status"]
+    moved = bool(status and status["changed"])
+    if not cells["changed"] and not moved:
+        text = f"project {word}: no control-plane cells needed to change for {name}"
+    else:
+        text = f"project {word}: {'would change' if ctx.dry else 'changed'} {len(cells['changed'])} control-plane cells for {name}"
+        if moved:
+            text += f" and set its status to {status['to']}"
+        text += "; dry run, nothing written" if ctx.dry else ""
+    if status is None:
+        text += "\n  the manifest has no status cell for this project; run `stratarc reconcile` to add it"
+    return data, text
 
 
 def project_enable(ctx: Context) -> tuple[dict, str]:
@@ -924,6 +1004,65 @@ def agent_edit(ctx: Context) -> tuple[dict, str]:
     return {"name": name, "project": project, "file": saved}, _describe_save(saved)
 
 
+DEFAULT_AGENT_TOOLS = ("Read", "Grep", "Glob")
+
+
+def _agent_tools(raw: list[str] | None) -> list[str]:
+    from stratarc.validate import KNOWN_TOOLS, MCP_TOOL
+
+    names = [name for item in raw or [] for name in item.split(",") if name.strip()]
+    names = [name.strip() for name in names]
+    for name in names:
+        if name not in KNOWN_TOOLS and not MCP_TOOL.match(name):
+            raise ResourceError("invalid-value", f'"{name}" is not a tool an agent can declare.', hint="Use names such as Read, Grep, Glob, Edit, Bash, or an mcp__server__tool name.", param="tools")
+    return list(dict.fromkeys(names))
+
+
+def agent_add(ctx: Context) -> tuple[dict, str]:
+    root = ctx.root
+    args = ctx.args
+    name = args.name
+    if not validate_name(name):
+        raise ResourceError("invalid-name", f'The agent name "{name}" is not valid.', hint="Use lowercase letters, digits and hyphens, starting with a letter.", param="name")
+    if _agent_files(root, name, None):
+        raise ResourceError("agent-exists", f'The agent "{name}" already exists.', hint="Change it with `stratarc agent edit`, or pick another name.", param="name")
+    inherited: dict[str, str] = {}
+    if args.parent:
+        parent_files = [p for p in _check_agent(root, args.parent, None) if p.suffix == ".md"]
+        if not parent_files:
+            raise ResourceError("unknown-agent", f'The agent "{args.parent}" has no definition file (.md) to inherit from.', hint="Pick a parent that has a definition, or drop --parent.", param="parent")
+        inherited = _frontmatter(_read(parent_files[0]))
+    tools = _agent_tools(args.tools) or [t.strip() for t in inherited.get("tools", "").split(",") if t.strip()] or list(DEFAULT_AGENT_TOOLS)
+    description = args.description if args.description is not None else inherited.get("description", "").strip("\"'") or f"The {name} agent."
+    if not description.strip() or "\n" in description or "\r" in description:
+        raise ResourceError("invalid-value", "The description must be one non-empty line.", hint="Pass --description with a single line of text.", param="description")
+    model = inherited.get("model") or "inherit"
+    text = f"---\nname: {name}\ndescription: {json.dumps(description, ensure_ascii=False)}\ntools: {', '.join(tools)}\nmodel: {model}\n---\n\n# {name}\n\nDescribe what this agent does and how it should work.\n"
+    saved = _save(root / "agents" / f"{name}.md", text, root=root, dry=ctx.dry)
+    return {"name": name, "parent": args.parent, "tools": tools, "file": saved}, "agent add: " + _describe_save(saved)
+
+
+def agent_remove(ctx: Context) -> tuple[dict, str]:
+    root = ctx.root
+    name, project = ctx.args.name, ctx.args.project
+    _check_agent(root, name, project)
+    directory = root / "projects-root" / project / "agents" if project else root / "agents"
+    files = [directory / f"{name}{s}" for s in AGENT_SUFFIXES if (directory / f"{name}{s}").is_file()]
+    if not files:
+        raise ResourceError("unknown-agent", f'The agent "{name}" has no file in {_where(directory, root)}.', hint="Pass --project when the agent belongs to a project, or check the spelling.", param="name")
+    shown = [_where(p, root) for p in files]
+    backups_made: list[str] = []
+    if not ctx.dry:
+        ctx.need_yes(f'Removing the agent "{name}"')
+        for path in files:
+            made = _backup_file(path)
+            if made:
+                backups_made.append(made)
+            path.unlink()
+    data = {"name": name, "project": project, "removed": shown, "backups": len(backups_made), "dry_run": ctx.dry}
+    return data, f"agent remove: {'would remove' if ctx.dry else 'removed'} {', '.join(shown)}" + ("; dry run, nothing removed" if ctx.dry else f"; {len(backups_made)} backed up")
+
+
 def agent_explain(ctx: Context) -> tuple[dict, str]:
     root = ctx.root
     args = ctx.args
@@ -1004,18 +1143,26 @@ def account_show(ctx: Context) -> tuple[dict, str]:
     return data, "\n".join(lines_out)
 
 
+def _parse_assignment(item: str) -> tuple[list[str], Any]:
+    key, sep, raw = item.partition("=")
+    key = key.strip()
+    parts = key.split(".")
+    if not sep or not key or not all(_KEY_PART.match(p) for p in parts):
+        raise ResourceError("invalid-value", f'"{item}" is not KEY=VALUE.', hint="Write it like permissions.timeout=60.", param="set")
+    try:
+        value: Any = json.loads(raw)
+    except json.JSONDecodeError:
+        value = raw
+    if isinstance(value, (dict, float, type(None))):
+        raise ResourceError("invalid-value", f'"{key}" cannot take that value.', hint="Use strings, integers, booleans or lists of strings.", param="set")
+    return parts, value
+
+
 def _parse_assignments(items: list[str]) -> dict[str, Any]:
     tree: dict[str, Any] = {}
     for item in items:
-        key, sep, raw = item.partition("=")
-        key = key.strip()
-        parts = key.split(".")
-        if not sep or not key or not all(_KEY_PART.match(p) for p in parts):
-            raise ResourceError("invalid-value", f'"{item}" is not KEY=VALUE.', hint="Write it like permissions.timeout=60.", param="set")
-        try:
-            value: Any = json.loads(raw)
-        except json.JSONDecodeError:
-            value = raw
+        parts, value = _parse_assignment(item)
+        key = ".".join(parts)
         node = tree
         for part in parts[:-1]:
             node = node.setdefault(part, {})
@@ -1047,8 +1194,107 @@ def account_add(ctx: Context) -> tuple[dict, str]:
 def account_edit(ctx: Context) -> tuple[dict, str]:
     root = ctx.root
     files = _check_account(root, ctx.args.name)
-    saved = _edit_file(files[0], root=root, dry=ctx.dry, editor=ctx.editor, environ=ctx.environ)
+    sets, unsets = ctx.args.set or [], ctx.args.unset or []
+    if sets or unsets:
+        saved = _change_account_values(files[0], sets, unsets, root=root, dry=ctx.dry)
+    else:
+        saved = _edit_file(files[0], root=root, dry=ctx.dry, editor=ctx.editor, environ=ctx.environ)
     return {"name": ctx.args.name, "file": saved}, _describe_save(saved)
+
+
+def _change_account_values(path: Path, sets: list[str], unsets: list[str], *, root: Path, dry: bool) -> dict[str, Any]:
+    """Apply `--set KEY=VALUE` and `--unset KEY` to an account file, then save it like any other edit.
+
+    A TOML file goes through the line editor, which keeps comments and layout. A JSON file is parsed, changed and written back with two-space indentation; its key order is kept and a new key goes last.
+    """
+    shown = _where(path, root)
+    if path.suffix == ".json":
+        return _change_json_values(path, sets, unsets, root=root, dry=dry)
+    text = _read(path)
+    try:
+        expected = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ResourceError("invalid-edit", f"{shown} cannot be edited safely: {exc}.", hint="Fix the file by hand first.", param=shown) from None
+    unset_keys = []
+    for item in unsets:
+        parts = item.strip().split(".")
+        if not all(_KEY_PART.match(p) for p in parts):
+            raise ResourceError("invalid-value", f'"{item}" is not a key.', hint="Write it like permissions.timeout.", param="unset")
+        unset_keys.append(parts)
+    assignments = [_parse_assignment(item) for item in sets]
+    overlap = {".".join(p) for p, _ in assignments} & {".".join(p) for p in unset_keys}
+    if overlap:
+        raise ResourceError("invalid-value", f'"{sorted(overlap)[0]}" is both set and unset.', hint="Use one of --set and --unset for each key.", param="set")
+    new_text = text
+    for parts, value in assignments:
+        table, key = tuple(parts[:-1]), parts[-1]
+        node = expected
+        for part in table:
+            node = node.setdefault(part, {})
+            if not isinstance(node, dict):
+                raise ResourceError("invalid-edit", f'"{".".join(parts)}" conflicts with an existing value in {shown}.', hint="The file was left unchanged.", param="set")
+        if isinstance(node.get(key), dict):
+            raise ResourceError("invalid-edit", f'"{".".join(parts)}" is a table in {shown}, not a value.', hint="Set one of its keys instead. The file was left unchanged.", param="set")
+        try:
+            literal = layout._toml_value(value)
+        except TypeError as exc:
+            raise ResourceError("invalid-value", str(exc), hint="Use strings, integers, booleans or lists of strings.", param="set") from None
+        node[key] = value
+        new_text = set_toml_values(new_text, table, {key: literal})
+    for parts in unset_keys:
+        table, key = tuple(parts[:-1]), parts[-1]
+        node = expected
+        for part in table:
+            node = node.get(part) if isinstance(node, dict) else None
+        removed = remove_toml_key(new_text, table, key) if isinstance(node, dict) and key in node and not isinstance(node[key], dict) else None
+        if removed is None:
+            raise ResourceError("unknown-key", f'The key "{".".join(parts)}" is not set in {shown}.', hint="Run `stratarc account show NAME` for the keys.", param="unset")
+        del node[key]
+        new_text = removed
+    try:
+        after = tomllib.loads(new_text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ResourceError("invalid-edit", f"{shown} could not be edited safely: {exc}.", hint="Edit the file by hand. It was left unchanged.", param=shown) from None
+    if after != expected:
+        raise ResourceError("invalid-edit", f"{shown} could not be edited safely: the layout is not one the editor follows.", hint="Edit the file by hand. It was left unchanged.", param=shown)
+    return _save(path, new_text, root=root, dry=dry)
+
+
+def _change_json_values(path: Path, sets: list[str], unsets: list[str], *, root: Path, dry: bool) -> dict[str, Any]:
+    shown = _where(path, root)
+    try:
+        doc = json.loads(_read(path))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ResourceError("invalid-edit", f"{shown} cannot be edited safely: {exc}.", hint="Fix the file by hand first.", param=shown) from None
+    if not isinstance(doc, dict):
+        raise ResourceError("invalid-edit", f"{shown} cannot be edited safely: the top level is not an object.", hint="Fix the file by hand first.", param=shown)
+    unset_keys = []
+    for item in unsets:
+        parts = item.strip().split(".")
+        if not all(_KEY_PART.match(p) for p in parts):
+            raise ResourceError("invalid-value", f'"{item}" is not a key.', hint="Write it like permissions.timeout.", param="unset")
+        unset_keys.append(parts)
+    assignments = [_parse_assignment(item) for item in sets]
+    overlap = {".".join(p) for p, _ in assignments} & {".".join(p) for p in unset_keys}
+    if overlap:
+        raise ResourceError("invalid-value", f'"{sorted(overlap)[0]}" is both set and unset.', hint="Use one of --set and --unset for each key.", param="set")
+    for parts, value in assignments:
+        node = doc
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+            if not isinstance(node, dict):
+                raise ResourceError("invalid-edit", f'"{".".join(parts)}" conflicts with an existing value in {shown}.', hint="The file was left unchanged.", param="set")
+        if isinstance(node.get(parts[-1]), dict):
+            raise ResourceError("invalid-edit", f'"{".".join(parts)}" is an object in {shown}, not a value.', hint="Set one of its keys instead. The file was left unchanged.", param="set")
+        node[parts[-1]] = value
+    for parts in unset_keys:
+        node = doc
+        for part in parts[:-1]:
+            node = node.get(part) if isinstance(node, dict) else None
+        if not isinstance(node, dict) or parts[-1] not in node or isinstance(node[parts[-1]], dict):
+            raise ResourceError("unknown-key", f'The key "{".".join(parts)}" is not set in {shown}.', hint="Run `stratarc account show NAME` for the keys.", param="unset")
+        del node[parts[-1]]
+    return _save(path, json.dumps(doc, indent=2, ensure_ascii=False) + "\n", root=root, dry=dry)
 
 
 def account_remove(ctx: Context) -> tuple[dict, str]:
@@ -1090,7 +1336,9 @@ HANDLERS: dict[tuple[str, str], Callable[[Context], tuple[dict, str]]] = {
     ("runtime", "target"): runtime_target,
     ("agent", "list"): agent_list,
     ("agent", "show"): agent_show,
+    ("agent", "add"): agent_add,
     ("agent", "edit"): agent_edit,
+    ("agent", "remove"): agent_remove,
     ("agent", "explain"): agent_explain,
     ("account", "list"): account_list,
     ("account", "show"): account_show,
@@ -1160,6 +1408,14 @@ def _parser() -> argparse.ArgumentParser:
     p = leaf(agent, "show", "one agent")
     p.add_argument("name")
     p.add_argument("--project", metavar="P")
+    p = leaf(agent, "add", "create an agent definition in the source root", write=True)
+    p.add_argument("name")
+    p.add_argument("--parent", metavar="P", help="an existing agent whose tools and description are the defaults")
+    p.add_argument("--tools", nargs="+", metavar="TOOL", help="the tools the agent may use (space or comma separated)")
+    p.add_argument("--description", metavar="TEXT", help="one line saying when to use the agent")
+    p = leaf(agent, "remove", "delete an agent's files, keeping a backup", write=True, yes=True)
+    p.add_argument("name")
+    p.add_argument("--project", metavar="P")
     p = leaf(agent, "edit", "open the agent's file in $EDITOR", write=True)
     p.add_argument("name")
     p.add_argument("--project", metavar="P")
@@ -1177,7 +1433,10 @@ def _parser() -> argparse.ArgumentParser:
     p = leaf(account, "add", "create an account file", write=True)
     p.add_argument("name")
     p.add_argument("--set", action="append", metavar="KEY=VALUE", help="a value to write (repeatable)")
-    leaf(account, "edit", "open the account's file in $EDITOR", write=True).add_argument("name")
+    p = leaf(account, "edit", "open the account's file in $EDITOR, or change values with --set and --unset", write=True)
+    p.add_argument("name")
+    p.add_argument("--set", action="append", metavar="KEY=VALUE", help="set a value, keeping the file's comments (repeatable)")
+    p.add_argument("--unset", action="append", metavar="KEY", help="remove a value (repeatable)")
     leaf(account, "remove", "delete an account file", write=True, yes=True).add_argument("name")
     return parser
 

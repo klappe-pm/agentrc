@@ -97,7 +97,9 @@ guard_log_event() {
 
   local dir="${GUARD_LOG_DIR:-${HOME:-/tmp}/.agent-hooks/telemetry}"
   mkdir -p "$dir" 2>/dev/null || return 0
-  local file="$dir/guard-events-$(date -u '+%Y-%m-%d').jsonl"
+  local day file
+  day="$(date -u '+%Y-%m-%d')"
+  file="$dir/guard-events-${day}.jsonl"
   local runtime="${GUARD_LOG_RUNTIME:-$(_guard_log_infer_runtime)}"
 
   # A guard label can quote the rejected text, so redact before it is stored.

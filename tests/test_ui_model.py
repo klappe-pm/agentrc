@@ -123,6 +123,63 @@ def test_sync_preview_writes_nothing():
     assert sorted(p.relative_to(FIXTURE).as_posix() for p in FIXTURE.rglob("*") if p.is_file()) == before
 
 
+def _copy(tmp_path):
+    import shutil
+
+    root = tmp_path / "source"
+    shutil.copytree(FIXTURE, root)
+    return root
+
+
+def test_edit_role_names_the_root_files_only(tmp_path):
+    assert model.edit_role(FIXTURE, FIXTURE / "stratarc.toml") == "config"
+    assert model.edit_role(FIXTURE, FIXTURE / "permissions.json") == "permissions"
+    assert model.edit_role(FIXTURE, FIXTURE / "projects-root" / "notes" / "permissions.json") is None
+
+
+def test_finish_edit_keeps_a_valid_edit_and_backs_up_the_original(tmp_path):
+    from stratarc import home_layout as layout
+
+    root = _copy(tmp_path)
+    path = root / "projects-root" / "notes" / "permissions.json"
+    original = path.read_bytes()
+    session = model.begin_edit(path)
+    path.write_text('{"timeout": 90}\n', encoding="utf-8")
+    outcome = model.finish_edit(root, session)
+    assert outcome.ok and outcome.changed and not outcome.problems
+    assert path.read_text(encoding="utf-8") == '{"timeout": 90}\n'
+    assert any(p.read_bytes() == original for p in layout.backups_dir().rglob("*") if p.is_file())
+
+
+def test_finish_edit_restores_the_original_on_an_invalid_edit(tmp_path):
+    root = _copy(tmp_path)
+    path = root / "projects-root" / "notes" / "permissions.json"
+    original = path.read_bytes()
+    session = model.begin_edit(path)
+    path.write_text("{not json", encoding="utf-8")
+    outcome = model.finish_edit(root, session)
+    assert not outcome.ok and outcome.problems
+    assert path.read_bytes() == original
+
+
+def test_finish_edit_uses_the_config_validator_for_the_root_file(tmp_path):
+    root = _copy(tmp_path)
+    path = root / "stratarc.toml"
+    original = path.read_bytes()
+    session = model.begin_edit(path)
+    path.write_text("owner = [\n", encoding="utf-8")
+    assert not model.finish_edit(root, session).ok
+    assert path.read_bytes() == original
+
+
+def test_finish_edit_removes_a_file_that_did_not_exist_when_it_is_invalid(tmp_path):
+    path = tmp_path / "new.json"
+    session = model.begin_edit(path)
+    path.write_text("{", encoding="utf-8")
+    assert not model.finish_edit(tmp_path, session).ok
+    assert not path.exists()
+
+
 def test_open_in_editor_uses_the_environment(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setenv("VISUAL", "")

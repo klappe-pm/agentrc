@@ -2127,6 +2127,29 @@ def test_owned_github_origins_receive_the_workflow_and_the_check(world, owner, o
     assert (checkout / CHECK).read_bytes() == (PACKAGED_CI / "attribution-check.py").read_bytes()
 
 
+def test_every_script_a_rendered_workflow_runs_is_delivered_by_the_same_sync(world, owner):
+    """A workflow that runs a path the sync never wrote fails on every project it is rendered into."""
+    import re
+
+    checkout = origin_checkout(world, f"git@github.com:{OWNER}/proj.git")
+    world.sync()
+    for rendered in (WORKFLOW, COMMENT_WORKFLOW):
+        text = (checkout / rendered).read_text()
+        scripts = re.findall(r"python3\s+(\S+)", text)
+        assert scripts, rendered
+        for script in scripts:
+            assert (checkout / script).is_file(), f"{rendered} runs {script}, which the sync did not deliver"
+
+
+def test_this_repositorys_own_workflows_run_files_it_holds():
+    import re
+
+    repo = Path(__file__).resolve().parent.parent
+    for workflow in (repo / ".github" / "workflows").glob("*.yml"):
+        for script in re.findall(r"python3\s+(\S+\.py)", workflow.read_text()):
+            assert (repo / script).is_file(), f"{workflow.name} runs {script}, which the repository does not hold"
+
+
 @pytest.mark.parametrize(
     "origin",
     [

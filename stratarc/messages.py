@@ -399,6 +399,42 @@ _MESSAGES = (
         "The change conflicts with what already exists: {detail}",
         "Resolve the conflict, or choose another name or path, then run the command again.",
     ),
+    Message(
+        "msg-1155",
+        CONFLICT,
+        "The agent already exists: {detail}",
+        "Change it with `stratarc agent edit`, or pick another name.",
+    ),
+    Message(
+        "msg-1156",
+        INVALID_INPUT,
+        "The agents relay to each other in a loop: {detail}",
+        "Remove one \"parent\" so the chain ends at an agent with no parent.",
+    ),
+    Message(
+        "msg-1157",
+        INVALID_INPUT,
+        "The relay chain of the agent is too long: {detail}",
+        "Shorten the chain, or give the child the settings directly.",
+    ),
+    Message(
+        "msg-1158",
+        INVALID_INPUT,
+        "An agent's \"parent\" or \"relay\" is not valid: {detail}",
+        "Name an existing agent in \"parent\" and give \"relay\" an \"inherit\" list of key patterns, or remove the key.",
+    ),
+    Message(
+        "msg-1159",
+        INVALID_INPUT,
+        "A --set, --set-json or --set-mode flag is not valid: {detail}",
+        "Write KEY=VALUE, quote JSON for your shell, and pass --set-mode only with the --set or --set-json that sets the key.",
+    ),
+    Message(
+        "msg-1160",
+        UNAVAILABLE,
+        "The terminal interface needs a terminal, and its input or output is redirected.",
+        "Run `stratarc ui` in an interactive terminal, or use the commands that print text, such as `stratarc config list`.",
+    ),
 )
 
 CATALOG: dict[str, Message] = {message.id: message for message in _MESSAGES}
@@ -459,6 +495,11 @@ CODE_MESSAGES: dict[str, str] = {
     "editor-failed": "msg-1152",
     "ui-extra-missing": "msg-1153",
     "conflict": "msg-1154",
+    "agent-exists": "msg-1155",
+    "relay-cycle": "msg-1156",
+    "relay-depth": "msg-1157",
+    "relay-invalid": "msg-1158",
+    "flag-invalid": "msg-1159",
 }
 
 
@@ -481,16 +522,30 @@ class CliError(Exception):
 
     @property
     def problem(self) -> str:
-        return self.message.problem.format(**self.values)
+        return self.message.problem.format_map(_Values(self.values))
 
     @property
     def recovery(self) -> str:
-        return self.message.recovery.format(**self.values)
+        return self.message.recovery.format_map(_Values(self.values))
+
+
+class _Values(dict):
+    """Format values where a placeholder the caller did not supply reads as "it" rather than raising."""
+
+    def __missing__(self, key: str) -> str:
+        return "it"
 
 
 def from_code(code: str, detail: object, *, param: str | None = None) -> CliError | None:
-    """The catalog error for a module's string code, with the module's own text as the detail, or None when the code has no entry."""
+    """The catalog error for a module's string code, with the module's own text as the detail, or None when the code has no entry.
+
+    The param, when given, also fills the {path} and {name} placeholders some messages carry, so a code raised with only a detail still renders a complete sentence.
+    """
     message_id = CODE_MESSAGES.get(code)
     if message_id is None:
         return None
-    return CliError(message_id, param=param, detail=detail)
+    values: dict[str, object] = {"detail": detail}
+    if param is not None:
+        values["path"] = param
+        values["name"] = param
+    return CliError(message_id, param=param, **values)

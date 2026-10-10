@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 import tomllib
 from datetime import datetime, timedelta, timezone
@@ -80,6 +81,49 @@ def test_safe_write_of_a_new_file_makes_no_backup(stratarc_home: Path) -> None:
     root = layout.ensure_layout()
     assert layout.safe_write(root / "state" / "new.json", "{}") is None
     assert not list(layout.backups_dir().glob("state__new.json/*"))
+
+
+def under_umask(value: int):
+    class Scope:
+        def __enter__(self):
+            self.old = os.umask(value)
+
+        def __exit__(self, *exc):
+            os.umask(self.old)
+
+    return Scope()
+
+
+def test_safe_write_keeps_home_files_private_by_default(stratarc_home: Path) -> None:
+    root = layout.ensure_layout()
+    with under_umask(0o022):
+        layout.safe_write(root / "state" / "private.json", "{}")
+        layout.safe_write(root / "state" / "private.json", "[]")
+    assert mode(root / "state" / "private.json") == 0o600
+
+
+def test_safe_write_to_a_source_root_keeps_the_mode_of_the_file_it_replaces(stratarc_home: Path, tmp_path: Path) -> None:
+    path = tmp_path / "src" / "run.sh"
+    path.parent.mkdir()
+    path.write_text("one")
+    path.chmod(0o755)
+    with under_umask(0o022):
+        backup = layout.safe_write(path, "two", private=False)
+    assert path.read_text() == "two"
+    assert mode(path) == 0o755
+    assert backup is not None and mode(backup) == 0o600
+
+
+def test_safe_write_to_a_source_root_creates_new_files_0644_and_dirs_0755(stratarc_home: Path, tmp_path: Path) -> None:
+    existing = tmp_path / "src"
+    existing.mkdir()
+    existing.chmod(0o755)
+    path = existing / "nested" / "AGENTS.md"
+    with under_umask(0o022):
+        assert layout.safe_write(path, "# x\n", private=False) is None
+    assert mode(path) == 0o644
+    assert mode(path.parent) == 0o755
+    assert mode(existing) == 0o755
 
 
 def test_safe_write_same_instant_does_not_overwrite_a_backup(stratarc_home: Path) -> None:
