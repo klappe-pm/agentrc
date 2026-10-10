@@ -26,6 +26,7 @@ Source root and deployment:
 - [diff is a read-only full render](2026-10-09-diff-is-a-read-only-full-render.md)
 - [verify defines drift as a dry run](2026-10-09-verify-defines-drift-as-a-dry-run.md)
 - [sync verifies and rolls back on drift](2026-10-09-sync-verifies-and-rolls-back-on-drift.md)
+- [rollback places every adapter action line](2026-10-10-rollback-places-every-adapter-action-line.md), refines the verify and rollback record: relative and file-less lines are covered by the render's owned set
 - [sync records changes at its write points](2026-10-09-sync-records-changes-at-its-write-points.md)
 - [private checks gate deploy only when the source root opts in](2026-10-09-private-checks-gate-deploy-only-when-the-source-root-opts-in.md)
 - [the active source root is resolved in one place](2026-10-09-the-active-source-root-is-resolved-in-one-place.md)

@@ -134,6 +134,7 @@ class DeployState:
     versions: dict[str, str | None] | None = None
     backups: dict[pathlib.Path, pathlib.Path | None] = dataclasses.field(default_factory=dict)
     modes: dict[pathlib.Path, int] = dataclasses.field(default_factory=dict)
+    unplaced: list[str] = dataclasses.field(default_factory=list)
 
 
 def _logging_on() -> bool:
@@ -254,10 +255,16 @@ def _back_up_planned(adapter, name: str, stage: pathlib.Path, target: pathlib.Pa
     from stratarc.deploy_guard import stamp_name
 
     actions = verify._sync_call(adapter, name, stage, target, root, dry_run=True)
-    named, _unplaced = verify._drifted_paths(actions, target)
-    for rel in sorted(named):
+    scratch, owned = verify._owned_files(adapter, name, stage, root, [])
+    if scratch is not None:
+        shutil.rmtree(scratch, ignore_errors=True)
+    named, unplaced = verify._drifted_paths(actions, target, owned if scratch is not None else None)
+    # A line that names no file is covered by the whole set the render owns; with no render, it cannot be placed and the rollback is refused.
+    for rel in sorted(named | owned):
         _remember(target / rel, state)
     _remember(target / stamp_name(root), state)
+    if scratch is None:
+        state.unplaced.extend(f"{name}: {' '.join(a.split())[:120]}" for a in unplaced)
 
 
 def _roll_back(state: DeployState) -> bool:
@@ -265,6 +272,10 @@ def _roll_back(state: DeployState) -> bool:
     from stratarc.messages import CliError
 
     complete = True
+    for line in state.unplaced:
+        complete = False
+        error = CliError("msg-1119", param="backup", path=line)
+        print(f"error {error.id}  {error.problem}\n  {error.recovery}", file=sys.stderr)
     for path, backup in state.backups.items():
         try:
             if backup is None:
