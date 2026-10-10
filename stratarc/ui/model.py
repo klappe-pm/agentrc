@@ -1,6 +1,6 @@
 """The data behind the terminal interface, with no terminal library in sight.
 
-Everything the screen shows is built here from the same library layer the commands use: `stratarc.layers` for resolved values and where they came from, `stratarc.config_cmd` for the explain text, `stratarc.changelog` for log entries, `stratarc.sync` for the sync preview and `stratarc.verify` for verification. Nothing in this module writes to the source root or to a deployed file; the one write path is `open_in_editor`, which hands a file to the editor and leaves the change to the person.
+Everything the screen shows is built here from the same library layer the commands use: `stratarc.layers` for resolved values and where they came from, `stratarc.config_cmd` for the explain text, `stratarc.changelog` for log entries, `stratarc.sync` for the sync preview and `stratarc.verify` for verification. Nothing in this module writes to the source root or to a deployed file; the one write path is `open_in_editor`, which hands a file to the editor, and `begin_edit` and `finish_edit` wrap it so an invalid result is validated and undone.
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from stratarc import changelog, config_cmd, layers, log_cmd, verify
+from stratarc import changelog, config_cmd, layers, log_cmd, resources_cmd, verify
+from stratarc import home_layout as layout
 from stratarc.layers import LayerError, Layers, Resolution
 
 SOURCE = "source"
@@ -237,3 +238,61 @@ def open_in_editor(path: Path) -> int:
     """Open a file in `$VISUAL` or `$EDITOR`, wait for it to close, and return the editor's status."""
     command = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
     return subprocess.call([*shlex.split(command), str(path)])
+
+
+# ---- the edit guard --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class EditOutcome:
+    """What became of an edit: kept (valid), or restored to the original because it was invalid."""
+
+    ok: bool
+    changed: bool
+    problems: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class EditSession:
+    """The file as it was before the editor opened, so an invalid edit can be undone."""
+
+    path: Path
+    original: bytes | None
+
+
+def edit_role(root: Path, path: Path) -> str | None:
+    """The validation role `resources_cmd` gives a file: `config` or `permissions` for the root's own two files."""
+    if Path(path).parent == Path(root):
+        return {"stratarc.toml": "config", "permissions.json": "permissions"}.get(Path(path).name)
+    return None
+
+
+def begin_edit(path: Path) -> EditSession:
+    """Remember the file and put a copy of it in the home's backups (an identical `safe_write`) before the editor opens."""
+    path = Path(path)
+    if not path.is_file():
+        return EditSession(path, None)
+    original = path.read_bytes()
+    layout.safe_write(path, original)
+    return EditSession(path, original)
+
+
+def finish_edit(root: Path, session: EditSession) -> EditOutcome:
+    """Validate the edited file with the validator `stratarc config edit` uses; on a problem put the original back through `safe_write`.
+
+    The invalid text stays in the home's backups, so nothing the person typed is lost.
+    """
+    path = session.path
+    try:
+        edited = path.read_bytes().decode("utf-8") if path.is_file() else None
+        problems = [] if edited is None else resources_cmd.problems_in(path, edited, edit_role(root, path))
+    except (OSError, UnicodeDecodeError) as error:
+        problems = [f"the edited file cannot be read as UTF-8 text: {error}"]
+    if problems:
+        if session.original is None:
+            path.unlink(missing_ok=True)
+        else:
+            layout.safe_write(path, session.original)
+        return EditOutcome(False, False, tuple(problems))
+    now = path.read_bytes() if path.is_file() else None
+    return EditOutcome(True, now != session.original)

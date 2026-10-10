@@ -15,7 +15,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Static, Tree
+from textual.worker import Worker, WorkerState
 
+from stratarc.home_layout import ToolError
 from stratarc.layers import LayerError
 from stratarc.ui import model
 from stratarc.ui.model import Editor, Node
@@ -60,6 +62,7 @@ class StrataApp(App[int]):
         self.selected: Node = self.tree_model
         self.mode = "detail"
         self.text = ""
+        self.job: Worker | None = None
 
     # ----- layout -----
 
@@ -120,13 +123,46 @@ class StrataApp(App[int]):
     def action_log(self) -> None:
         self._show("log", model.log_text(self.selected))
 
+    # ----- slow work, off the interface thread -----
+
     def action_sync_preview(self) -> None:
-        _code, text = model.sync_preview(self.root)
-        self._show("sync preview", text)
+        self._start("sync preview", lambda: model.sync_preview(self.root))
 
     def action_verify(self) -> None:
-        code, text = model.run_verify(self.root)
-        self._show("verify", f"{text}\n\nexit {code}")
+        self._start("verify", lambda: model.run_verify(self.root))
+
+    def _start(self, mode: str, call) -> None:
+        if self.job is not None and self.job.state in (WorkerState.PENDING, WorkerState.RUNNING):
+            self._busy(f"{self.job.name} is still running, q cancels")
+            return
+        self._busy(f"running {mode}, q cancels")
+        self._show(mode, f"running {mode}...")
+        self.job = self.run_worker(call, name=mode, group="job", thread=True, exit_on_error=False)
+
+    def _busy(self, line: str) -> None:
+        self.query_one("#help", Static).update(Text(line))
+
+    def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        worker = event.worker
+        if worker is not self.job or event.state not in (WorkerState.SUCCESS, WorkerState.ERROR, WorkerState.CANCELLED):
+            return
+        self.query_one("#help", Static).update(Text(HELP))
+        if event.state is WorkerState.CANCELLED:
+            return
+        if event.state is WorkerState.ERROR:
+            error = worker.error
+            detail = f"error {error.code}  {error.message}" if isinstance(error, LayerError) else f"error  {error}"
+            self._show(worker.name, detail)
+            return
+        code, text = worker.result
+        self._show(worker.name, text if worker.name == "sync preview" else f"{text}\n\nexit {code}")
+
+    async def action_quit(self) -> None:
+        if self.job is not None:
+            self.job.cancel()
+        self.exit()
+
+    # ----- edit -----
 
     def action_edit(self) -> None:
         try:
@@ -138,6 +174,11 @@ class StrataApp(App[int]):
             self._show("edit", "No file owns this node yet.")
             return
         try:
+            session = model.begin_edit(target)
+        except (OSError, ToolError) as error:
+            self._show("edit", f"error  {error}")
+            return
+        try:
             with self.suspend():
                 status = self.editor(target)
         except Exception as error:  # the driver cannot suspend (a headless run), or the editor failed to start
@@ -147,9 +188,14 @@ class StrataApp(App[int]):
                 self._show("edit", f"The editor could not start: {error}")
                 return
             status = self.editor(target)
+        outcome = model.finish_edit(self.root, session)
+        if not outcome.ok:
+            listed = "\n".join(f"  {problem}" for problem in outcome.problems)
+            self._show("edit", f"{target.name} would be invalid. The original was restored from the backup.\n{listed}")
+            return
         self.tree_model = model.build_tree(self.root)
         self._fill_tree()
-        self._show("edit", f"edited {target.name}  (editor status {status})")
+        self._show("edit", f"{'saved' if outcome.changed else 'unchanged'} {target.name}  (editor status {status})")
 
 
 def run(root: Path) -> int:
