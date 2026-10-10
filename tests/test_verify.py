@@ -215,6 +215,12 @@ def test_no_installed_runtime_is_a_note_not_drift(tmp_path: Path, isolated: Path
     assert any("no installed runtime" in n for n in report.notes)
 
 
+def test_a_relative_destination_resolves_under_the_runtime_target(tmp_path: Path) -> None:
+    named, unplaced = verify._drifted_paths(["copy commands/commit.md -> prompts/commit.md"], tmp_path)
+    assert named == {"prompts/commit.md"}
+    assert unplaced == []
+
+
 def test_format_report_lists_drift_only_unless_verbose(deployed) -> None:
     root, target = deployed
     (target / "AGENTS.md").write_text("drifted\n")
