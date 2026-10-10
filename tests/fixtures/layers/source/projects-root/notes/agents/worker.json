@@ -1,0 +1,9 @@
+{
+  "parent": "lead",
+  "relay": {
+    "inherit": ["permissions.*"]
+  },
+  "settings": {
+    "owner": "worker-owner"
+  }
+}

@@ -19,18 +19,28 @@ A scalar is replaced by a higher layer and a table merges key by key. A list tha
 
 `replace` swaps the list and `extend` appends to it. The first layer that defines a list needs no mode.
 
-Every step of a resolution carries its layer, file, line, operation (`set`, `merge`, `replace`, `extend`) and the earlier values it overrode. The module only reads; it never writes.
+An agent file may name a `parent` (a sub-agent started by another agent) and a `relay` table saying which keys the child takes from the parent's settings:
+
+    "parent": "lead",
+    "relay": {"inherit": ["permissions.*"]}
+
+`inherit` is a list of dotted-key patterns (`*` matches any run of characters, dots included). The default is none: nothing is inherited implicitly. Inherited values enter the agent layer below the child's own, so the child's file wins. The chain is followed to its root (a parent's own relay applies to what it passes on), a cycle is an error, and the chain holds at most `RELAY_DEPTH_LIMIT` agents. An agent file may also set `account`; the child's account wins over its parent's, and a given account (`--account`) wins over both. `parent`, `relay` and `account` are read by the resolver and are not settings.
+
+Values passed by the caller of `load` as `flags` form the last layer, with provenance file `--set` and line 0. A flag list needs a mode (`flag_modes`) like any layer that redefines a list.
+
+Every step of a resolution carries its layer, file, line, operation (`set`, `merge`, `replace`, `extend`), the earlier values it overrode and, for a relayed value, the parent that passed it down. The module only reads; it never writes.
 """
 
 from __future__ import annotations
 
 import bisect
+import fnmatch
 import json
 import os
 import re
 import tomllib
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -40,12 +50,15 @@ LAYERS = ("base", "runtime", "account", "project", "agent", "env", "flags")
 MODES = ("replace", "extend")
 MODES_KEY = "_modes"
 ENV_PREFIX = "STRATARC_"
+RELAY_DEPTH_LIMIT = 8
+RELAY_KEYS = ("parent", "relay", "account")
+FLAGS_LABEL = "--set"
 
 
 class LayerError(Exception):
     """A layer file or a resolution cannot be used.
 
-    `code` is stable (`parse-error`, `list-mode-missing`, `mode-invalid`, `type-mismatch`, `unknown-key`, `unknown-project`, `unknown-agent`, `unknown-account`, `unknown-runtime`); `hint` says how to recover.
+    `code` is stable (`parse-error`, `list-mode-missing`, `mode-invalid`, `type-mismatch`, `unknown-key`, `unknown-project`, `unknown-agent`, `unknown-account`, `unknown-runtime`, `relay-invalid`, `relay-cycle`, `relay-depth`, `flag-invalid`); `hint` says how to recover.
     """
 
     def __init__(self, code: str, message: str, *, file: Path | None = None, line: int | None = None, key: str | None = None, hint: str = "") -> None:
@@ -253,6 +266,7 @@ class Source:
     file: Path | None
     label: str
     entries: dict[str, Entry] = field(default_factory=dict)
+    via: str | None = None  # for a relayed source, the parent that passed it down
 
 
 def _line_for(lines: Mapping[Path_, int], path: Path_) -> int | None:
@@ -308,8 +322,6 @@ def _validate(request: Request, kinds: list[FileKind]) -> None:
     root = request.root
     if request.project and not (root / "projects-root" / request.project).is_dir():
         raise LayerError("unknown-project", f'The project "{request.project}" has no folder under projects-root.', hint="Run `stratarc projects` to list the projects, or check the spelling.")
-    if request.account and not _find_named(root, kinds, "account", "account", request.account):
-        raise LayerError("unknown-account", f'The account "{request.account}" has no file under accounts/.', hint="Create accounts/<name>.toml, or check the spelling.")
     if request.runtime and not _find_named(root, kinds, "runtime", "runtime", request.runtime):
         from stratarc.config import ConfigError, load_config
 
@@ -319,19 +331,201 @@ def _validate(request: Request, kinds: list[FileKind]) -> None:
             known = {}
         if request.runtime not in known:
             raise LayerError("unknown-runtime", f'The runtime "{request.runtime}" is not in stratarc.toml and has no runtimes/ file.', hint="Use a runtime named under [runtimes] in stratarc.toml.")
-    if request.agent:
-        stems = [root / "agents", *( [root / "projects-root" / request.project / "agents"] if request.project else [])]
-        if not any(d.is_dir() and any(f.stem == request.agent for f in d.iterdir()) for d in stems):
-            raise LayerError("unknown-agent", f'The agent "{request.agent}" has no file under agents/.', hint="Check the spelling, or pass --project when the agent belongs to a project.")
 
 
-def load_sources(request: Request, kinds: list[FileKind] | None = None) -> list[Source]:
-    """Read every layer file the request reaches, in precedence order (base first). Env and flags are added by `resolve`."""
+# ---- the dispatch relay ---------------------------------------------------------------------
+
+
+@dataclass
+class _Agent:
+    """One agent's files: its settings (without the relay keys) and what it declares about its parent and account."""
+
+    name: str
+    found: bool = False
+    sources: list[Source] = field(default_factory=list)
+    decl: dict[str, tuple[Any, Path, int | None]] = field(default_factory=dict)
+
+    @property
+    def parent(self) -> str | None:
+        return self.decl["parent"][0] if "parent" in self.decl else None
+
+    @property
+    def inherit(self) -> tuple[str, ...]:
+        relay = self.decl["relay"][0] if "relay" in self.decl else {}
+        return tuple(relay.get("inherit", ()))
+
+    @property
+    def account(self) -> str | None:
+        return self.decl["account"][0] if "account" in self.decl else None
+
+
+@dataclass(frozen=True)
+class RelayLink:
+    """One child to parent edge of a chain: what the child's `relay.inherit` took from the parent and what it left behind, with the reason."""
+
+    agent: str
+    parent: str
+    inherit: tuple[str, ...]
+    file: Path | None
+    line: int | None
+    taken: tuple[str, ...]
+    skipped: tuple[tuple[str, str], ...]  # (key, reason)
+
+
+@dataclass(frozen=True)
+class Relay:
+    """The relay of a request: its links (child first) and where the account came from (`--account`, `agent`, `parent` or empty)."""
+
+    links: list[RelayLink] = field(default_factory=list)
+    account: str | None = None
+    account_from: str = ""
+    account_agent: str | None = None
+
+
+@dataclass(frozen=True)
+class RelayEdge:
+    agent: str
+    parent: str
+    inherit: tuple[str, ...]
+    file: Path
+    line: int | None
+
+
+def _check_declarations(agent: _Agent) -> None:
+    def bad(key: str, message: str, hint: str) -> LayerError:
+        _, file, line = agent.decl[key]
+        return LayerError("relay-invalid", message, file=file, line=line, key=key, hint=hint)
+
+    if "parent" in agent.decl and not (isinstance(agent.parent, str) and agent.parent):
+        raise bad("parent", '"parent" must be the name of an agent', 'Write "parent": "<agent>".')
+    if "account" in agent.decl and not (isinstance(agent.account, str) and agent.account):
+        raise bad("account", '"account" must be the name of an account', 'Write "account": "<name>".')
+    if "relay" in agent.decl:
+        value = agent.decl["relay"][0]
+        if "parent" not in agent.decl:
+            raise bad("relay", '"relay" is set but there is no "parent" to relay from', 'Add "parent": "<agent>", or remove the relay table.')
+        if not isinstance(value, dict):
+            raise bad("relay", '"relay" must be a table', 'Write "relay": {"inherit": ["permissions.*"]}.')
+        for name in value:
+            if name != "inherit":
+                raise bad("relay", f'"relay" has an unknown key "{name}"', 'The only key is "inherit".')
+        inherit = value.get("inherit", [])
+        if not isinstance(inherit, list) or not all(isinstance(p, str) and p for p in inherit):
+            raise bad("relay", '"relay.inherit" must be a list of key patterns', 'Write "inherit": ["permissions.*"].')
+
+
+def _read_agent(request: Request, kinds: list[FileKind], name: str) -> _Agent:
+    values = {"project": request.project, "agent": name, "account": request.account, "runtime": request.runtime}
+    agent = _Agent(name)
+    for kind in kinds:
+        if kind.layer != "agent" or any(not values.get(n) for n in re.findall(r"\{(\w+)\}", kind.template)):
+            continue
+        path = request.root / kind.template.format(**values)
+        if not path.is_file():
+            continue
+        agent.found = True
+        data, lines = PARSERS[path.suffix](path)
+        data = dict(data)
+        for key in RELAY_KEYS:
+            if key in data:
+                agent.decl[key] = (data.pop(key), path, _line_for(lines, (key,)))
+        agent.sources.append(Source("agent", path, kind.template.format(**values), flatten(data, lines, path, kind.namespace)))
+    _check_declarations(agent)
+    return agent
+
+
+def _agent_chain(request: Request, kinds: list[FileKind]) -> list[_Agent]:
+    """The requested agent and its parents, child first. A cycle and a chain past `RELAY_DEPTH_LIMIT` agents are errors."""
+    chain: list[_Agent] = []
+    names: list[str] = []
+    name: str | None = request.agent
+    declared_by: _Agent | None = None
+    while name:
+        _, file, line = declared_by.decl["parent"] if declared_by else (None, None, None)
+        if name in names:
+            raise LayerError("relay-cycle", f"agent relay cycle: {' -> '.join([*names, name])}", file=file, line=line, key="parent", hint='Remove one "parent" so the chain ends at an agent with no parent.')
+        if len(names) >= RELAY_DEPTH_LIMIT:
+            raise LayerError("relay-depth", f"the relay chain of {request.agent} is longer than {RELAY_DEPTH_LIMIT} agents: {' -> '.join([*names, name])}", file=file, line=line, key="parent", hint="Shorten the chain, or flatten it by giving the child the settings directly.")
+        agent = _read_agent(request, kinds, name)
+        if not agent.found:
+            if declared_by is None:
+                raise LayerError("unknown-agent", f'The agent "{name}" has no file under agents/.', hint="Check the spelling, or pass --project when the agent belongs to a project.")
+            raise LayerError("unknown-agent", f'The agent "{name}", named as the parent of "{declared_by.name}", has no file under agents/.', file=file, line=line, key="parent", hint="Check the spelling of the parent, or create its agent file.")
+        names.append(name)
+        chain.append(agent)
+        declared_by, name = agent, agent.parent
+    return chain
+
+
+def _relay_sources(chain: list[_Agent]) -> tuple[list[Source], list[RelayLink]]:
+    """The agent-layer sources for a chain (the root ancestor's first) and the links, child first.
+
+    Walking from the root down, each child takes from the parent's effective settings only the keys its `relay.inherit` names.
+    """
+    effective = list(chain[-1].sources)
+    links: list[RelayLink] = []
+    for index in range(len(chain) - 2, -1, -1):
+        child, parent = chain[index], chain[index + 1]
+        patterns = child.inherit
+        reason = f"no relay.inherit pattern matches (inherit: {', '.join(patterns)})" if patterns else "relay.inherit is empty, so nothing is inherited"
+        taken: set[str] = set()
+        skipped: dict[str, str] = {}
+        inherited: list[Source] = []
+        for source in effective:
+            kept: dict[str, Entry] = {}
+            for key, entry in source.entries.items():
+                if any(fnmatch.fnmatchcase(key, p) for p in patterns):
+                    kept[key] = entry
+                    taken.add(key)
+                else:
+                    skipped.setdefault(key, reason)
+            if kept:
+                inherited.append(Source("agent", source.file, source.label, kept, parent.name if source.via is None else f"{parent.name} <- {source.via}"))
+        _, file, line = child.decl["parent"]
+        links.append(RelayLink(child.name, parent.name, patterns, file, line, tuple(sorted(taken)), tuple(sorted(skipped.items()))))
+        effective = inherited + child.sources
+    return effective, links[::-1]
+
+
+def _relay_account(request: Request, chain: list[_Agent]) -> Relay:
+    if request.account:
+        return Relay(account=request.account, account_from="--account")
+    for index, agent in enumerate(chain):
+        if agent.account:
+            return Relay(account=agent.account, account_from="agent" if index == 0 else "parent", account_agent=agent.name)
+    return Relay()
+
+
+def relay_edges(root: Path, project: str | None, kinds: list[FileKind] | None = None) -> list[RelayEdge]:
+    """Every agent under the source root (and the project) that names a parent, sorted by agent."""
     kinds = FILE_KINDS if kinds is None else kinds
+    request = Request(Path(root), project)
+    dirs = [request.root / "agents", *([request.root / "projects-root" / project / "agents"] if project else [])]
+    names = sorted({f.stem for d in dirs if d.is_dir() for f in d.iterdir() if f.suffix in PARSERS})
+    edges: list[RelayEdge] = []
+    for name in names:
+        agent = _read_agent(request, kinds, name)
+        if agent.parent:
+            _, file, line = agent.decl["parent"]
+            edges.append(RelayEdge(name, agent.parent, agent.inherit, file, line))
+    return edges
+
+
+def _load(request: Request, kinds: list[FileKind]) -> tuple[list[Source], Relay]:
     _validate(request, kinds)
-    values = {"project": request.project, "agent": request.agent, "account": request.account, "runtime": request.runtime}
+    chain = _agent_chain(request, kinds) if request.agent else []
+    agent_sources, links = _relay_sources(chain) if chain else ([], [])
+    relay = replace(_relay_account(request, chain), links=links)
+    if relay.account and not _find_named(request.root, kinds, "account", "account", relay.account):
+        owner = next((a for a in chain if a.name == relay.account_agent), None)
+        _, file, line = owner.decl["account"] if owner else (None, None, None)
+        raise LayerError("unknown-account", f'The account "{relay.account}" has no file under accounts/.', file=file, line=line, key="account", hint="Create accounts/<name>.toml, or check the spelling.")
+    values = {"project": request.project, "agent": request.agent, "account": relay.account, "runtime": request.runtime}
     sources: list[Source] = []
     for layer in LAYERS:
+        if layer == "agent":
+            sources += agent_sources
+            continue
         for kind in kinds:
             if kind.layer != layer:
                 continue
@@ -343,7 +537,12 @@ def load_sources(request: Request, kinds: list[FileKind] | None = None) -> list[
                 continue
             data, lines = PARSERS[path.suffix](path)
             sources.append(Source(layer, path, kind.template.format(**values), flatten(data, lines, path, kind.namespace)))
-    return sources
+    return sources, relay
+
+
+def load_sources(request: Request, kinds: list[FileKind] | None = None) -> list[Source]:
+    """Read every layer file the request reaches, in precedence order (base first). Env and flags are added by `load`."""
+    return _load(request, FILE_KINDS if kinds is None else kinds)[0]
 
 
 def env_name(key: str) -> str:
@@ -381,6 +580,7 @@ class Step:
     mode: str | None
     value: Any
     overrode: tuple[tuple[str, Any], ...] = ()  # (layer, value) of the earlier steps this one discarded
+    via: str | None = None  # the parent that relayed this value to the requested agent
 
 
 @dataclass(frozen=True)
@@ -401,33 +601,34 @@ def _fold(key: str, contributions: list[tuple[Source, Entry]]) -> Resolution:
         value, mode, line = entry.value, entry.mode, entry.line
         if not steps:
             current = list(value) if isinstance(value, list) else value
-            steps.append(Step(source.layer, source.file, source.label, line, mode or "set", mode, value))
+            steps.append(Step(source.layer, source.file, source.label, line, mode or "set", mode, value, via=source.via))
             continue
         earlier = tuple((s.layer, s.value) for s in steps)
         if isinstance(value, list):
             if not isinstance(current, list):
                 raise LayerError("type-mismatch", f'"{key}" is a list in {source.label} but not in a lower layer', file=source.file, line=line, key=key, hint="Give the key one type in every layer.")
             if mode is None:
+                hint = f"Pass --set-mode {key}=replace (or extend) beside the list." if source.layer == "flags" else f'Add "{MODES_KEY}": {{"{key.rsplit(".", 1)[-1]}": "replace"}} (or "extend") beside the list.'
                 raise LayerError(
                     "list-mode-missing",
                     f'"{key}" is a list that {source.label} redefines without a mode, and there is no implicit append.',
                     file=source.file,
                     line=line,
                     key=key,
-                    hint=f'Add "{MODES_KEY}": {{"{key.rsplit(".", 1)[-1]}": "replace"}} (or "extend") beside the list.',
+                    hint=hint,
                 )
             op = mode
             current = list(value) if mode == "replace" else current + value
-            steps.append(Step(source.layer, source.file, source.label, line, op, mode, value, earlier if mode == "replace" else ()))
+            steps.append(Step(source.layer, source.file, source.label, line, op, mode, value, earlier if mode == "replace" else (), source.via))
         elif isinstance(value, dict):
             if not isinstance(current, dict):
                 raise LayerError("type-mismatch", f'"{key}" is a table in {source.label} but not in a lower layer', file=source.file, line=line, key=key, hint="Give the key one type in every layer.")
             current = {**current, **value}
-            steps.append(Step(source.layer, source.file, source.label, line, "merge", None, value))
+            steps.append(Step(source.layer, source.file, source.label, line, "merge", None, value, via=source.via))
         else:
             if isinstance(current, (list, dict)):
                 raise LayerError("type-mismatch", f'"{key}" is a scalar in {source.label} but a list or table in a lower layer', file=source.file, line=line, key=key, hint="Give the key one type in every layer.")
-            steps.append(Step(source.layer, source.file, source.label, line, "set", None, value, earlier))
+            steps.append(Step(source.layer, source.file, source.label, line, "set", None, value, earlier, source.via))
             current = value
     return Resolution(key, current, tuple(steps))
 
@@ -438,6 +639,7 @@ class Layers:
 
     request: Request
     sources: list[Source]
+    relay: Relay = field(default_factory=Relay)
 
     def keys(self) -> list[str]:
         return sorted({k for s in self.sources for k in s.entries})
@@ -445,7 +647,12 @@ class Layers:
     def resolve(self, key: str) -> Resolution:
         contributions = [(s, s.entries[key]) for s in self.sources if key in s.entries]
         if not contributions:
-            raise LayerError("unknown-key", f'No layer sets "{key}".', key=key, hint="Run `stratarc config list` to see the keys.")
+            hint = "Run `stratarc config list` to see the keys."
+            for link in self.relay.links:
+                for skipped, reason in link.skipped:
+                    if skipped == key:
+                        hint = f'"{link.parent}" sets this key but "{link.agent}" does not inherit it: {reason}.'
+            raise LayerError("unknown-key", f'No layer sets "{key}".', key=key, hint=hint)
         return _fold(key, contributions)
 
     def expand(self, key: str) -> list[str]:
@@ -476,16 +683,32 @@ def load(
     runtime: str | None = None,
     environ: Mapping[str, str] | None = None,
     flags: Mapping[str, Any] | None = None,
+    flag_modes: Mapping[str, str] | None = None,
     kinds: list[FileKind] | None = None,
 ) -> Layers:
-    """Load the layers for a request. `environ` defaults to the process environment; `flags` maps a key to a scalar value."""
+    """Load the layers for a request.
+
+    `environ` defaults to the process environment. `flags` maps a key to any value and forms the last layer (file `--set`, line 0); a list in `flags` that redefines a lower list needs its mode in `flag_modes`.
+    """
     request = Request(Path(root), project, agent, account, runtime)
-    sources = load_sources(request, kinds)
+    sources, relay = _load(request, FILE_KINDS if kinds is None else kinds)
+    flag_source = _flags_source(flags or {}, flag_modes or {}) if flags or flag_modes else None
     known = {k for s in sources for k in s.entries} | set(flags or {})
     sources += _env_sources(known, os.environ if environ is None else environ)
-    if flags:
-        sources.append(Source("flags", None, "flags", {k: Entry(v, None) for k, v in flags.items()}))
-    return Layers(request, sources)
+    if flag_source and flag_source.entries:
+        sources.append(flag_source)
+    return Layers(request, sources, relay)
+
+
+def _flags_source(flags: Mapping[str, Any], modes: Mapping[str, str]) -> Source:
+    for key, mode in modes.items():
+        if key not in flags:
+            raise LayerError("flag-invalid", f'--set-mode names "{key}" but no --set or --set-json sets it', key=key, hint="Pass --set-json KEY=<list> beside --set-mode, or drop the mode.")
+        if mode not in MODES:
+            raise LayerError("mode-invalid", f'mode "{mode}" for "{key}" is not one of: {", ".join(MODES)}', key=key, hint="Use replace or extend.")
+        if not isinstance(flags[key], list):
+            raise LayerError("mode-invalid", f'"{key}" has a mode but is not a list', key=key, hint="Remove --set-mode, or pass the value with --set-json as a list.")
+    return Source("flags", None, FLAGS_LABEL, {k: Entry(v, 0, modes.get(k)) for k, v in flags.items()})
 
 
 def nest(values: Mapping[str, Any]) -> dict[str, Any]:
