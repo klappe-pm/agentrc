@@ -9,6 +9,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# An external test exits with this status to be skipped, not failed.
+SKIP_STATUS = 77
+
 # Make the checkout importable without installing it.
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -72,6 +75,9 @@ class ExternalTestItem(pytest.Item):
         result = subprocess.run(
             self.command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
         )
+        if result.returncode == SKIP_STATUS:
+            # A test that cannot run on this machine says why on stderr and exits 77, the status make and automake use.
+            pytest.skip((result.stderr or result.stdout).strip() or "skipped by the test")
         if result.returncode != 0:
             raise ExternalTestFailure(
                 f"{' '.join(self.command)} exited {result.returncode}\n"

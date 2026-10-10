@@ -19,7 +19,11 @@ fail() {
   exit 1
 }
 
-command -v /usr/bin/caffeinate >/dev/null 2>&1 || fail "no /usr/bin/caffeinate on this machine to compare against"
+# The shim wraps a macOS tool; on any other machine there is nothing to compare against, so the test is skipped (status 77), not failed.
+if ! command -v /usr/bin/caffeinate >/dev/null 2>&1; then
+  printf '%s\n' "caffeinate-shim.test: no /usr/bin/caffeinate on this machine to compare against" >&2
+  exit 77
+fi
 
 # The test runner's own process is the parent here, not claude, so the shim
 # must pass every argument straight through to the real binary. A long-lived
