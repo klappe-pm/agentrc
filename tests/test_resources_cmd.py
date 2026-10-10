@@ -677,13 +677,96 @@ def test_account_edit_set_refuses_bad_input_and_leaves_the_file(capsys, src, str
     assert path.read_bytes() == before and backups(stratarc_home) == []
 
 
-def test_account_edit_set_needs_a_toml_file_and_never_opens_the_editor(capsys, src):
-    (src / "accounts/side.json").write_text('{"a": 1}\n')
-    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--set", "a=2")
+SIDE = '{\n  "zeta": 1,\n  "permissions": {\n    "timeout": 90,\n    "allow": ["a"]\n  },\n  "alpha": "x"\n}\n'
+
+
+def test_account_edit_set_changes_a_json_value_keeping_key_order_and_indentation(capsys, src, stratarc_home):
+    path = src / "accounts/side.json"
+    path.write_text(SIDE)
+    code, out, _ = run(capsys, src, "account", "edit", "side", "--set", "permissions.timeout=95", "--set", "alpha=y")
+    assert code == 0 and "changed" in out
+    doc = json.loads(path.read_text())
+    assert list(doc) == ["zeta", "permissions", "alpha"] and doc["permissions"] == {"timeout": 95, "allow": ["a"]} and doc["alpha"] == "y"
+    assert path.read_text() == json.dumps(doc, indent=2) + "\n"
+    (backup,) = backups(stratarc_home)
+    assert json.loads(backup.read_text())["permissions"]["timeout"] == 90
+    code, out, _ = run(capsys, src, "account", "edit", "side", "--set", "permissions.timeout=95")
+    assert code == 0 and "unchanged" in out and len(backups(stratarc_home)) == 1
+
+
+def test_account_edit_set_adds_json_keys_and_tables_after_the_existing_ones(capsys, src):
+    path = src / "accounts/side.json"
+    path.write_text(SIDE)
+    code, _, _ = run(capsys, src, "account", "edit", "side", "--set", 'permissions.deny=["b"]', "--set", "other.level=3", "--set", "flag=true")
+    assert code == 0
+    doc = json.loads(path.read_text())
+    assert list(doc) == ["zeta", "permissions", "alpha", "other", "flag"]
+    assert list(doc["permissions"]) == ["timeout", "allow", "deny"] and doc["other"] == {"level": 3} and doc["flag"] is True
+    code, data, _ = run_json(capsys, src, "account", "show", "side")
+    assert code == 0 and data["data"]["values"]["other.level"]["value"] == 3
+
+
+def test_account_edit_unset_removes_a_json_key_and_dry_run_writes_nothing(capsys, src, stratarc_home, tmp_path):
+    path = src / "accounts/side.json"
+    path.write_text(SIDE)
+    snapshot = tree_snapshot(tmp_path)
+    code, out, _ = run(capsys, src, "account", "edit", "side", "--unset", "permissions.timeout", "--dry-run")
+    assert code == 0 and "would change" in out and tree_snapshot(tmp_path) == snapshot
+    code, _, _ = run(capsys, src, "account", "edit", "side", "--unset", "permissions.timeout", "--unset", "alpha")
+    assert code == 0
+    doc = json.loads(path.read_text())
+    assert doc == {"zeta": 1, "permissions": {"allow": ["a"]}} and list(doc) == ["zeta", "permissions"]
+    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--unset", "alpha")
+    assert (code, data["error"]["code"]) == (2, "unknown-key")
+
+
+def test_account_edit_set_refuses_bad_json_edits_and_leaves_the_file(capsys, src, stratarc_home):
+    path = src / "accounts/side.json"
+    path.write_text(SIDE)
+    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--set", "alpha.deeper=1")
     assert (code, data["error"]["code"]) == (2, "invalid-edit")
+    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--set", "permissions=1")
+    assert (code, data["error"]["code"]) == (2, "invalid-edit")
+    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--set", "permissions._modes.allow=sideways")
+    assert (code, data["error"]["code"]) == (2, "invalid-edit")
+    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--set", "alpha=1.5")
+    assert (code, data["error"]["code"]) == (2, "invalid-value")
+    path.write_text("[1, 2]\n")
+    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--set", "a=1")
+    assert (code, data["error"]["code"]) == (2, "invalid-edit")
+    path.write_text("{broken")
+    code, data, _ = run_json(capsys, src, "account", "edit", "side", "--set", "a=1")
+    assert (code, data["error"]["code"]) == (2, "invalid-edit")
+    assert path.read_text() == "{broken" and backups(stratarc_home) == []
+
+
+def test_account_edit_set_never_opens_the_editor(capsys, src):
     calls = []
     code, _, _ = run(capsys, src, "account", "edit", "work", "--set", "permissions.timeout=1", editor=lambda p: calls.append(p))
     assert code == 0 and calls == []
+
+
+def test_source_root_writes_keep_the_mode_of_the_file_and_the_home_stays_private(capsys, src, stratarc_home):
+    old = os.umask(0o022)
+    try:
+        path = src / "accounts/work.toml"
+        path.chmod(0o755)
+        code, _, _ = run(capsys, src, "account", "edit", "work", "--set", "permissions.timeout=95")
+        assert code == 0 and stat_mode(path) == 0o755
+        code, _, _ = run(capsys, src, "account", "add", "fresh", "--set", "note=hi")
+        assert code == 0 and stat_mode(src / "accounts/fresh.toml") == 0o644
+        code, _, _ = run(capsys, src, "project", "add", "extra")
+        assert code == 0 and stat_mode(src / "projects-root/extra/AGENTS.md") == 0o644 and stat_mode(src / "projects-root/extra") == 0o755
+        code, _, _ = run(capsys, src, "project", "disable", "notes")
+        assert code == 0 and stat_mode(src / "control-plane.md") == 0o644
+    finally:
+        os.umask(old)
+    assert backups(stratarc_home) and all(stat_mode(b) == 0o600 for b in backups(stratarc_home))
+    assert stat_mode(stratarc_home / ".stratarc") == 0o700
+
+
+def stat_mode(path: Path) -> int:
+    return path.stat().st_mode & 0o7777
 
 
 def test_account_remove_needs_yes_then_backs_up(capsys, src, stratarc_home, tmp_path):

@@ -6,6 +6,7 @@ This page is the reference for the verbs that change the resources of a source r
 
 - The new content is validated before anything is saved. JSON and TOML must parse, list modes must be valid, `permissions.json` must satisfy the bundled schema and `stratarc.toml` must load. An invalid result exits 2 with `invalid-edit` and the file is left as it was.
 - The file is replaced through the home's safe write: the old version is copied into the home's `backups/` first, and a file that declares a newer schema is never rewritten (exit 5).
+- A file written into the source root keeps the mode of the file it replaces, and a new file is 0644 and a new directory 0755, subject to the umask, as `source init` writes them. Files in the home stay 0600 and its directories 0700, and so do the backups ([record](../../developer-docs/explanation/decisions/2026-10-10-source-root-files-keep-their-mode-and-the-home-stays-private.md)).
 - Every write verb accepts `--dry-run`, which validates, reports the change and writes nothing. A verb that deletes needs `--yes`, except under `--dry-run`.
 - Every verb accepts `--root PATH` and `--json`. With `--json` the output is one envelope `{ok, data, error}`.
 
@@ -23,7 +24,7 @@ Without a value flag the verb opens `$VISUAL` or `$EDITOR` on a temporary copy o
 - An existing key keeps its position. A new key is added after the table's last key. A new table is appended at the end of the file.
 - `--unset KEY` deletes the key's line. A key that is not set exits 2 with `unknown-key`. The table header stays even when it ends up empty.
 - Setting and unsetting the same key in one command exits 2 with `invalid-value`.
-- Only a `.toml` account file can be changed this way. An account kept as `.json` exits 2 with `invalid-edit`; edit it with the editor path.
+- A `.json` account file is changed with the same flags and keys ([record](../../developer-docs/explanation/decisions/2026-10-10-json-accounts-support-set-and-unset.md)). It is parsed, changed and written back with two-space indentation and a final newline. Existing keys keep their order and a new key goes last. A file that does not parse, or whose top level is not an object, exits 2 with `invalid-edit`.
 - A value that makes the file invalid, such as `--set permissions._modes.allow=sideways`, exits 2 with `invalid-edit` and nothing is written.
 
 ## agent-add

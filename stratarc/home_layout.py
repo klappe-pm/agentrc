@@ -8,7 +8,7 @@ config.toml  sources.toml  providers/  adapters/  state/  backups/  logs/  cache
 
 Rules this module enforces (see the CLI design, the-home-directory):
 
-- Directories are created mode 0700 and files 0600.
+- Directories in the home are created mode 0700 and files 0600. A file `safe_write` puts in a source root (`private=False`) keeps the mode of the file it replaces, and a new one is 0644.
 - Every file carries `schema_version`. A file whose version is newer than `SCHEMA_VERSION` is never rewritten; `safe_write` raises `NewerSchemaError`, which maps to the unavailable exit code.
 - `safe_write` copies the file it replaces into `backups/` first and replaces it atomically.
 - A clean removes only old backups and the disposable cache. `config.toml`, `sources.toml`, `providers/` and `adapters/` are never candidates.
@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import tempfile
 import tomllib
 from dataclasses import dataclass, field
@@ -126,8 +127,12 @@ def cache_dir() -> Path:
 
 def _mkdir(path: Path) -> None:
     try:
+        root = layout_root()
+        created = [p for p in (path, *path.parents) if not p.exists() and (p == root or root in p.parents)]
         path.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
         os.chmod(path, DIR_MODE)
+        for parent in created:
+            os.chmod(parent, DIR_MODE)
     except OSError as error:
         raise HomeError(f"The home directory {path} cannot be created or written to: {error.strerror or error}.", hint="Make it writable, or point at another one with STRATARC_HOME.", param="home") from None
 
@@ -276,21 +281,41 @@ def _backup(path: Path, now: datetime | None) -> Path | None:
     return target
 
 
-def safe_write(path: Path, data: str | bytes, *, now: datetime | None = None) -> Path | None:
+def _public_mode(path: Path) -> int:
+    """The mode a source-root file gets: the mode of the file it replaces, or 0644 subject to the umask for a new one."""
+    try:
+        return stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        mask = os.umask(0)
+        os.umask(mask)
+        return 0o644 & ~mask
+
+
+def safe_write(path: Path, data: str | bytes, *, now: datetime | None = None, private: bool = True) -> Path | None:
     """Replace `path` with `data`, keeping a copy of what was there.
 
     A file that declares a newer schema than this tool understands is refused before anything is touched. The new content is written to a temporary file in the same directory and moved into place, so a reader never sees a partial file. Returns the backup path, or None when the file did not exist.
+
+    With `private` (the default) the file is mode 0600 and a missing parent is made 0700, as everything in the home is. With `private=False`, for a file in a source root, the file keeps the mode of the file it replaces, a new file is 0644 and a missing parent directory 0755 (both subject to the umask), and an existing directory is left alone. The backup copy is always 0600.
     """
     path = Path(path)
     check_not_newer(path)
     payload = data.encode("utf-8") if isinstance(data, str) else data
-    _mkdir(path.parent)
+    if private:
+        _mkdir(path.parent)
+        file_mode = FILE_MODE
+    else:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise HomeError(f"{path.parent} cannot be created or written to: {error.strerror or error}.", hint="Make it writable.", param=str(path.parent)) from None
+        file_mode = _public_mode(path)
     backup = _backup(path, now)
     descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(payload)
-        os.chmod(temporary, FILE_MODE)
+        os.chmod(temporary, file_mode)
         os.replace(temporary, path)
     except OSError as error:
         try:

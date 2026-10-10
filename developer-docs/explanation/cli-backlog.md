@@ -20,6 +20,7 @@ This page orders the work that separates the shipped command line from the [desi
 - The private checks gate: a source root opts in to running its own checks before a deploy.
 - The flags layer: `--set`, `--set-json` and `--set-mode` on `config get`, `list` and `explain`, shown by `config explain` as the highest layer ([record](decisions/2026-10-09-explain-follows-the-dispatch-relay-and-flags-are-a-layer.md)).
 - The sub-agent relay chain in `config explain`: the inherited and withheld settings of a child agent and where its account came from.
+- File modes: a file written into a source root keeps its mode and a new one is 0644, while the home stays 0600 ([record](decisions/2026-10-10-source-root-files-keep-their-mode-and-the-home-stays-private.md)). `account edit --set` and `--unset` also change JSON account files ([record](decisions/2026-10-10-json-accounts-support-set-and-unset.md)).
 - `account edit --set` and `--unset` for TOML account files, `agent add` and `agent remove`, and the project status column, which `project enable` and `project disable` now keep in step ([record](decisions/2026-10-09-resource-verbs-fill-the-grammar-gaps.md)).
 - In the terminal interface: validation of an edit before it is kept, and worker threads for the sync preview and verify ([record](decisions/2026-10-09-the-interface-validates-edits-and-keeps-slow-work-off-its-thread.md)), plus a CI workflow that drives the interface through a pseudo-terminal.
 - Mutation proofs for the new command line tests ([record](decisions/2026-10-09-new-cli-tests-carry-mutation-proofs.md)).
@@ -30,14 +31,12 @@ This page orders the work that separates the shipped command line from the [desi
 
 1. The `config` writers: `set`, `unset`, `edit`. The editors they need have shipped with the resources.
 2. Rollback for project checkouts and the permission sweep. `--rollback-on-drift` restores runtime targets only.
-3. Settle a file mode inconsistency: `safe_write` gives files in the source root mode 0600 while `source init` writes 0644.
-4. `account edit --set` and `--unset` do not support JSON account files, which still go through the editor.
-5. The sync preview in the terminal interface captures standard output for the whole process, so only one such job can run at a time.
-6. The `ui` CI workflow has not been run on GitHub, so its pseudo-terminal steps are unproven there.
-7. If a short alias is ever shipped again, check it on macOS, Fedora and Alpine, in PyPI entry points and in the trademark registers, as well as the platforms checked for `starc`.
-8. Move llm-root onto the published package, which the migration records adr-0007 and adr-0009 in that repository describe.
-9. The first-run welcome screen. The documentation site and the generated command reference and error catalog have shipped.
+3. The sync preview in the terminal interface captures standard output for the whole process, so only one such job can run at a time.
+4. The `ui` CI workflow has not been run on GitHub, so its pseudo-terminal steps are unproven there.
+5. If a short alias is ever shipped again, check it on macOS, Fedora and Alpine, in PyPI entry points and in the trademark registers, as well as the platforms checked for `starc`.
+6. Move llm-root onto the published package, which the migration records adr-0007 and adr-0009 in that repository describe.
+7. The first-run welcome screen. The documentation site and the generated command reference and error catalog have shipped.
 
-## open-questions
+## decided
 
-- Whether list-valued settings default to replace or extend when a file omits `mode`.
+- List-valued settings never default to replace or extend: the resolver refuses a list override that omits its mode ([record](decisions/2026-10-10-list-overrides-never-default-their-mode.md)).

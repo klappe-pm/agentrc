@@ -13,6 +13,7 @@ Every record below is dated 2026-10-09 and was backfilled in one pass after the 
 Naming and scope:
 
 - [rename to stratarc](2026-10-09-rename-to-stratarc.md)
+- [the stratarc name passed its checks with two caveats](2026-10-10-the-stratarc-name-passed-its-checks-with-two-caveats.md) (confirms the rename; the trademark registers it left open were checked where a search could be run)
 - [public package ships code only and no private integrations](2026-10-09-public-package-ships-code-only-and-no-private-integrations.md)
 - [one engine name](2026-10-09-one-engine-name.md)
 
@@ -36,7 +37,9 @@ Settings, registries and state:
 - [layer order and provenance](2026-10-09-layer-order-and-provenance.md)
 - [explicit list modes in layers](2026-10-09-explicit-list-modes-in-layers.md)
 - [list modes use a modes table](2026-10-09-list-modes-use-a-modes-table.md), settles the open syntax point above
+- [list overrides never default their mode](2026-10-10-list-overrides-never-default-their-mode.md), settles the open default point in the two list mode records above
 - [home layout and safe writes](2026-10-09-home-layout-and-safe-writes.md)
+- [source root files keep their mode and the home stays private](2026-10-10-source-root-files-keep-their-mode-and-the-home-stays-private.md), refines the file modes in the home layout record
 - [the home is dot stratarc with an environment override](2026-10-09-the-home-is-dot-stratarc-with-an-environment-override.md), settles the open home point above
 - [adapter registry and support ranges](2026-10-09-adapter-registry-and-support-ranges.md)
 - [version detection runs in an isolated home](2026-10-09-version-detection-runs-in-an-isolated-home.md)
@@ -55,6 +58,7 @@ Command line and interfaces:
 - [starc is the short command alias](2026-10-09-starc-is-the-short-command-alias.md), superseded by the drop record below
 - [drop the starc alias](2026-10-09-drop-the-starc-alias.md), supersedes the starc alias record: the command is `stratarc` only
 - [resource verbs fill the grammar gaps](2026-10-09-resource-verbs-fill-the-grammar-gaps.md)
+- [JSON accounts support set and unset](2026-10-10-json-accounts-support-set-and-unset.md), extends the account verbs in the gaps record
 - [explain follows the dispatch relay and flags are a layer](2026-10-09-explain-follows-the-dispatch-relay-and-flags-are-a-layer.md)
 - [the interface validates edits and keeps slow work off its thread](2026-10-09-the-interface-validates-edits-and-keeps-slow-work-off-its-thread.md)
 - [CLI design is delivered in ordered slices](2026-10-09-cli-design-is-delivered-in-ordered-slices.md)

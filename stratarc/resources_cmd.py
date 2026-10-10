@@ -216,7 +216,7 @@ def _save(path: Path, text: str, *, root: Path, dry: bool, role: str | None = No
     changed = (not existed) or _read(path) != text
     result: dict[str, Any] = {"file": shown, "changed": changed, "created": not existed, "backup": None, "dry_run": dry}
     if changed and not dry:
-        backup = layout.safe_write(path, text)
+        backup = layout.safe_write(path, text, private=False)
         result["backup"] = str(backup) if backup else None
     return result
 
@@ -671,7 +671,7 @@ def _toggle_cells(root: Path, name: str, on: bool, dry: bool, strict: bool, stat
             if any(check.enabled(name, row) != on for row in result["changed"]) or (status_changed and check.status(name) != status):
                 raise ResourceError("invalid-edit", "control-plane.md did not take the change.", hint="The file was left unchanged.")
     if (result["changed"] or status_changed) and not dry:
-        backup = layout.safe_write(path, updated)
+        backup = layout.safe_write(path, updated, private=False)
         result["backup"] = str(backup) if backup else None
     return result
 
@@ -1203,10 +1203,13 @@ def account_edit(ctx: Context) -> tuple[dict, str]:
 
 
 def _change_account_values(path: Path, sets: list[str], unsets: list[str], *, root: Path, dry: bool) -> dict[str, Any]:
-    """Apply `--set KEY=VALUE` and `--unset KEY` to a TOML account file through the line editor, then save it like any other edit."""
+    """Apply `--set KEY=VALUE` and `--unset KEY` to an account file, then save it like any other edit.
+
+    A TOML file goes through the line editor, which keeps comments and layout. A JSON file is parsed, changed and written back with two-space indentation; its key order is kept and a new key goes last.
+    """
     shown = _where(path, root)
-    if path.suffix != ".toml":
-        raise ResourceError("invalid-edit", f"{shown} is not a TOML file, so --set and --unset cannot edit it.", hint="Edit it with `stratarc account edit NAME` and no flags.", param=shown)
+    if path.suffix == ".json":
+        return _change_json_values(path, sets, unsets, root=root, dry=dry)
     text = _read(path)
     try:
         expected = tomllib.loads(text)
@@ -1255,6 +1258,43 @@ def _change_account_values(path: Path, sets: list[str], unsets: list[str], *, ro
     if after != expected:
         raise ResourceError("invalid-edit", f"{shown} could not be edited safely: the layout is not one the editor follows.", hint="Edit the file by hand. It was left unchanged.", param=shown)
     return _save(path, new_text, root=root, dry=dry)
+
+
+def _change_json_values(path: Path, sets: list[str], unsets: list[str], *, root: Path, dry: bool) -> dict[str, Any]:
+    shown = _where(path, root)
+    try:
+        doc = json.loads(_read(path))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ResourceError("invalid-edit", f"{shown} cannot be edited safely: {exc}.", hint="Fix the file by hand first.", param=shown) from None
+    if not isinstance(doc, dict):
+        raise ResourceError("invalid-edit", f"{shown} cannot be edited safely: the top level is not an object.", hint="Fix the file by hand first.", param=shown)
+    unset_keys = []
+    for item in unsets:
+        parts = item.strip().split(".")
+        if not all(_KEY_PART.match(p) for p in parts):
+            raise ResourceError("invalid-value", f'"{item}" is not a key.', hint="Write it like permissions.timeout.", param="unset")
+        unset_keys.append(parts)
+    assignments = [_parse_assignment(item) for item in sets]
+    overlap = {".".join(p) for p, _ in assignments} & {".".join(p) for p in unset_keys}
+    if overlap:
+        raise ResourceError("invalid-value", f'"{sorted(overlap)[0]}" is both set and unset.', hint="Use one of --set and --unset for each key.", param="set")
+    for parts, value in assignments:
+        node = doc
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+            if not isinstance(node, dict):
+                raise ResourceError("invalid-edit", f'"{".".join(parts)}" conflicts with an existing value in {shown}.', hint="The file was left unchanged.", param="set")
+        if isinstance(node.get(parts[-1]), dict):
+            raise ResourceError("invalid-edit", f'"{".".join(parts)}" is an object in {shown}, not a value.', hint="Set one of its keys instead. The file was left unchanged.", param="set")
+        node[parts[-1]] = value
+    for parts in unset_keys:
+        node = doc
+        for part in parts[:-1]:
+            node = node.get(part) if isinstance(node, dict) else None
+        if not isinstance(node, dict) or parts[-1] not in node or isinstance(node[parts[-1]], dict):
+            raise ResourceError("unknown-key", f'The key "{".".join(parts)}" is not set in {shown}.', hint="Run `stratarc account show NAME` for the keys.", param="unset")
+        del node[parts[-1]]
+    return _save(path, json.dumps(doc, indent=2, ensure_ascii=False) + "\n", root=root, dry=dry)
 
 
 def account_remove(ctx: Context) -> tuple[dict, str]:
