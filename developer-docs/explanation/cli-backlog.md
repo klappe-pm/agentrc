@@ -32,7 +32,7 @@ This page orders the work that separates the shipped command line from the [desi
 1. The `config` writers: `set`, `unset`, `edit`. The editors they need have shipped with the resources.
 2. Rollback for project checkouts and the permission sweep. `--rollback-on-drift` restores runtime targets only.
 3. The sync preview in the terminal interface captures standard output for the whole process, so only one such job can run at a time.
-4. The `ui` CI workflow has not been run on GitHub, so its pseudo-terminal steps are unproven there.
+4. Two hook tests are sensitive to machine load. `tests/hooks/fleet-cap.test.sh` and `tests/hooks/subagent-cap-guard.test.sh` count dispatched agents against time windows, and both failed in one full run that overlapped other heavy work, then passed three times alone and in a full run on a quiet machine. Give them a fixed clock or wider windows so they do not depend on load.
 5. If a short alias is ever shipped again, check it on macOS, Fedora and Alpine, in PyPI entry points and in the trademark registers, as well as the platforms checked for `starc`.
 6. Move llm-root onto the published package, which the migration records adr-0007 and adr-0009 in that repository describe.
 7. The first-run welcome screen. The documentation site and the generated command reference and error catalog have shipped.
