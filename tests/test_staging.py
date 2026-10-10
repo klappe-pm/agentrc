@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib.resources import as_file
 from pathlib import Path
 
 import pytest
@@ -294,16 +295,57 @@ class TestSourceOverlay:
         assert (lib / "extra.sh").read_text(encoding="utf-8") == "# only in the source\n"
         assert (lib / "secret-scan.sh").read_bytes() == self.packaged("lib/secret-scan.sh")
 
-    def test_a_private_directory_under_lib_is_never_staged(self, root, stage_of):
-        write(root / "hooks" / "lib" / "private" / "patterns.json", "{}\n")
+    def test_fixtures_and_tests_under_lib_are_never_staged(self, root, stage_of):
         write(root / "hooks" / "lib" / "fixtures" / "case.txt", "x\n")
         write(root / "hooks" / "lib" / "check.test.sh", "#!/usr/bin/env bash\n")
         stage, _ = stage_of(Plane(hooks={"prose-guard"}))
         lib = stage / "hooks" / "lib"
         assert lib.is_dir()
-        assert not (lib / "private").exists()
         assert not (lib / "fixtures").exists()
         assert not (lib / "check.test.sh").exists()
+
+    def test_package_data_never_holds_a_private_directory(self):
+        packaged = data_dir("hooks")
+        with as_file(packaged) as hooks:
+            assert not [p for p in Path(hooks).rglob("*") if p.name == "private"]
+
+    def test_a_package_only_stage_has_no_private_directory(self, root, stage_of):
+        stage, _ = stage_of(Plane(hooks={"prose-guard"}))
+        assert (stage / "hooks" / "lib").is_dir()
+        assert not (stage / "hooks" / "lib" / "private").exists()
+
+    def test_source_root_private_files_are_staged_for_the_global_column(self, root, stage_of):
+        write(root / "hooks" / "lib" / "private" / "env-dump-patterns.json", '{"p": 1}\n')
+        write(root / "hooks" / "lib" / "private" / "nested" / "more.json", "{}\n")
+        stage, _ = stage_of(Plane(hooks={"prose-guard"}))
+        private = stage / "hooks" / "lib" / "private"
+        assert (private / "env-dump-patterns.json").read_text(encoding="utf-8") == '{"p": 1}\n'
+        assert (private / "nested" / "more.json").is_file()
+
+    def test_private_files_are_not_staged_where_no_hook_is_carried(self, root, stage_of):
+        write(root / "hooks" / "lib" / "private" / "env-dump-patterns.json", "{}\n")
+        stage, _ = stage_of(Plane())
+        assert not (stage / "hooks").exists()
+
+    def test_private_files_are_not_staged_into_a_project_column(self, root, stage_of):
+        write(root / "hooks" / "lib" / "private" / "env-dump-patterns.json", "{}\n")
+        stage, _ = stage_of(Plane(hooks={"prose-guard"}), column="demo")
+        assert (stage / "hooks" / "lib").is_dir()
+        assert not (stage / "hooks" / "lib" / "private").exists()
+
+    def test_a_private_file_removed_from_the_source_is_pruned_from_the_runtime(self, root, stage_of, tmp_path):
+        from stratarc.adapters._common import mirror_dir
+
+        private = write(root / "hooks" / "lib" / "private" / "env-dump-patterns.json", "{}\n")
+        target = tmp_path / "runtime" / "hooks"
+        stage, _ = stage_of(Plane(hooks={"prose-guard"}))
+        mirror_dir(stage / "hooks", target, delete_extra=True)
+        assert (target / "lib" / "private" / "env-dump-patterns.json").is_file()
+        private.unlink()
+        stage, _ = stage_of(Plane(hooks={"prose-guard"}))
+        mirror_dir(stage / "hooks", target, delete_extra=True)
+        assert not (target / "lib" / "private" / "env-dump-patterns.json").exists()
+        assert not (target / "lib" / "private").exists()
 
     def test_the_source_runtime_hooks_module_wins(self, root, stage_of):
         write(root / "hooks" / "opencode-runtime-hooks.ts", "// the source's own\n")

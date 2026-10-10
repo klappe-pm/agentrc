@@ -28,6 +28,8 @@ Source root and deployment:
 - [sync records changes at its write points](2026-10-09-sync-records-changes-at-its-write-points.md)
 - [private checks gate deploy only when the source root opts in](2026-10-09-private-checks-gate-deploy-only-when-the-source-root-opts-in.md)
 - [the active source root is resolved in one place](2026-10-09-the-active-source-root-is-resolved-in-one-place.md)
+- [the source root private hook files are staged from the source only](2026-10-09-the-source-root-private-hook-files-are-staged-from-the-source-only.md) (narrows the staging exclusion in the two records on guards and private extensions)
+- [rendered workflows must run files the sync delivers](2026-10-09-rendered-workflows-must-run-files-the-sync-delivers.md)
 
 Settings, registries and state:
 

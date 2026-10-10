@@ -19,8 +19,9 @@ the source root's own `hooks/` on top of them, file by file with the source
 winning: a hook script of the same name replaces the packaged one, the
 `hooks.json` registries merge with a source group replacing a packaged group
 that runs the same hooks, and `hooks/lib/` is copied from the package and then
-from the source root. A `private/` directory under either `hooks/lib/` is
-never staged.
+from the source root. A `private/` directory in the package data is never
+staged; the source root's own `hooks/lib/private/` is staged for the global
+column only (the user-level runtimes), never from package data.
 
 For the global column the stage mirrors the source root's layout:
   AGENTS.md, rules/{global,common}/<enabled>.md, rules/tiers.json, hooks/<enabled>.sh,
@@ -320,6 +321,17 @@ def _stage_shared_with_hooks(
                     dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns(*_LIB_IGNORED),
                 )
+        # The source root's private hook files reach the user-level runtimes
+        # only. Package data never holds them, and a project column's hooks
+        # land in a checkout that may be tracked or public.
+        private = root / "hooks" / "lib" / "private"
+        if col == "global" and private.is_dir():
+            shutil.copytree(
+                private,
+                stage / "hooks" / "lib" / "private",
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".DS_Store", "__pycache__"),
+            )
         runtime_hooks = _hook_file(hook_dirs, "opencode-runtime-hooks.ts")
         if runtime_hooks is not None:
             _copy(runtime_hooks, stage / "hooks" / runtime_hooks.name)
