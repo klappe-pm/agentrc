@@ -65,4 +65,5 @@ Docs and tests:
 - [static docs site built from the repo](2026-10-09-static-docs-site-built-from-the-repo.md)
 - [example output is captured, not written](2026-10-09-example-output-is-captured-not-written.md)
 - [pytest is the only test runner](2026-10-09-pytest-is-the-only-test-runner.md)
+- [shellcheck gates at warning severity](2026-10-10-shellcheck-gates-at-warning-severity.md)
 - [new CLI tests carry mutation proofs](2026-10-09-new-cli-tests-carry-mutation-proofs.md)

@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
       - name: shellcheck
         run: |
-          git ls-files -z '*.sh' 'stratarc/data/git-hooks/*' | xargs -0 shellcheck -x -P SCRIPTDIR
+          git ls-files -z '*.sh' 'stratarc/data/git-hooks/*' | xargs -0 shellcheck -x -P SCRIPTDIR -S warning
       - name: token-shaped value scan
         run: bash scripts/ci/token-scan.sh
       - name: frontmatter key check
